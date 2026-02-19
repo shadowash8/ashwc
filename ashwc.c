@@ -110,6 +110,31 @@ struct ashwc_keyboard {
     struct wl_listener destroy;
 };
 
+typedef union {
+    int i;
+    const char **v;
+} Arg;
+
+struct bind {
+    xkb_keysym_t keysym;
+    void (*func)(const Arg *arg, struct ashwc_server *server);
+    Arg arg;
+};
+
+
+static void spawn(const Arg *arg, struct ashwc_server *server) {
+    if (fork() == 0) {
+        execvp(((char **)arg->v)[0], (char **)arg->v);
+        _exit(1);
+    }
+}
+
+static void quit(const Arg *arg, struct ashwc_server *server) {
+    wl_display_terminate(server->wl_display);
+}
+
+#include "config.h"
+
 static void focus_toplevel(struct ashwc_toplevel *toplevel) {
     /* Note: this function only deals with keyboard focus. */
     if (toplevel == NULL) {
@@ -172,39 +197,14 @@ static void keyboard_handle_modifiers(
 }
 
 static bool handle_keybinding(struct ashwc_server *server, xkb_keysym_t sym) {
-    /*
-     * Here we handle compositor keybindings. This is when the compositor is
-     * processing keys, rather than passing them on to the client for its own
-     * processing.
-     *
-     * This function assumes Alt is held down.
-     */
-    switch (sym) {
-    case XKB_KEY_Escape:
-        wl_display_terminate(server->wl_display);
-        break;
-
-    case XKB_KEY_Return:
-        if (fork() == 0) {
-            // This is the child process
-            execl("/bin/sh", "/bin/sh", "-c", "foot", (char *)NULL);
-            // If execl returns, it failed
-            _exit(1);
+    /* Alt check is already done by the caller (keyboard_handle_key) */
+    for (size_t i = 0; i < sizeof(binds) / sizeof(binds[0]); i++) {
+        if (sym == binds[i].keysym) {
+            binds[i].func(&binds[i].arg, server);
+            return true;
         }
-        break;
-    case XKB_KEY_F1:
-        /* Cycle to the next toplevel */
-        if (wl_list_length(&server->toplevels) < 2) {
-            break;
-        }
-        struct ashwc_toplevel *next_toplevel =
-            wl_container_of(server->toplevels.prev, next_toplevel, link);
-        focus_toplevel(next_toplevel);
-        break;
-    default:
-        return false;
     }
-    return true;
+    return false;
 }
 
 static void keyboard_handle_key(
