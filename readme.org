@@ -1,0 +1,2 @@
+* credits
+- =ashwc= is based on the [[https://gitlab.freedesktop.org/wlroots/wlroots/-/tree/master/tinywl][tinywl]] example from the =wlroots= project.
