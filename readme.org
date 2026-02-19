@@ -1,2 +1,6 @@
+* ashwc
+=ashwc= is a wayland compositor based on wlroots
+this is a experiment project to get to know the workings of a wayland compositor and learn c
+
 * credits
 - =ashwc= is based on the [[https://gitlab.freedesktop.org/wlroots/wlroots/-/tree/master/tinywl][tinywl]] example from the =wlroots= project.
