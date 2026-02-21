@@ -116,6 +116,7 @@ typedef union {
 } Arg;
 
 struct bind {
+    uint32_t modifier;
     xkb_keysym_t keysym;
     void (*func)(const Arg *arg, struct ashwc_server *server);
     Arg arg;
@@ -196,10 +197,9 @@ static void keyboard_handle_modifiers(
         &keyboard->wlr_keyboard->modifiers);
 }
 
-static bool handle_keybinding(struct ashwc_server *server, xkb_keysym_t sym) {
-    /* Alt check is already done by the caller (keyboard_handle_key) */
+static bool handle_keybinding(struct ashwc_server *server, uint32_t mods, xkb_keysym_t sym) {
     for (size_t i = 0; i < sizeof(binds) / sizeof(binds[0]); i++) {
-        if (sym == binds[i].keysym) {
+        if (sym == binds[i].keysym && mods == binds[i].modifier) {
             binds[i].func(&binds[i].arg, server);
             return true;
         }
@@ -225,12 +225,12 @@ static void keyboard_handle_key(
 
     bool handled = false;
     uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
-    if ((modifiers & WLR_MODIFIER_ALT) &&
+    if (modifiers &&
             event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
-        /* If alt is held down and this button was _pressed_, we attempt to
+        /* If a modifier is held down and this button was _pressed_, we attempt to
          * process it as a compositor keybinding. */
         for (int i = 0; i < nsyms; i++) {
-            handled = handle_keybinding(server, syms[i]);
+            handled = handle_keybinding(server, modifiers, syms[i]);
         }
     }
 
