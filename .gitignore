@@ -2,3 +2,4 @@ ashwc
 config.h
 
 protocols/
+tests/
