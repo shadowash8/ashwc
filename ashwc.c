@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
+#include <signal.h>
+#include <fcntl.h>
 #include <wayland-server-core.h>
 #include <wlr/backend.h>
 #include <wlr/render/allocator.h>
@@ -149,6 +151,22 @@ struct bind {
 
 static void spawn(const Arg *arg, struct ashwc_server *server) {
     if (fork() == 0) {
+        /* Close all fds the child inherited from the compositor
+         * so clients don't hold onto Wayland sockets etc.
+        */
+        int devnull = open("/dev/null", O_RDWR);
+        if (devnull >= 0) {
+            dup2(devnull, STDIN_FILENO);
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            if (devnull > STDERR_FILENO) close(devnull);
+        }
+        // Close all other fds
+        int maxfd = sysconf(_SC_OPEN_MAX);
+        for (int fd = STDERR_FILENO + 1; fd < maxfd; fd++) {
+            close(fd);
+        }
+        setsid(); // detach from compositor's process group
         execvp(((char **)arg->v)[0], (char **)arg->v);
         _exit(1);
     }
@@ -393,9 +411,6 @@ static void seat_request_set_selection(struct wl_listener *listener, void *data)
 static struct ashwc_toplevel *desktop_toplevel_at(
         struct ashwc_server *server, double lx, double ly,
         struct wlr_surface **surface, double *sx, double *sy) {
-    /* This returns the topmost node in the scene at the given layout coords.
-     * We only care about surface nodes as we are specifically looking for a
-     * surface in the surface tree of a ashwc_toplevel. */
     struct wlr_scene_node *node = wlr_scene_node_at(
         &server->scene->tree.node, lx, ly, sx, sy);
     if (node == NULL || node->type != WLR_SCENE_NODE_BUFFER) {
@@ -409,13 +424,25 @@ static struct ashwc_toplevel *desktop_toplevel_at(
     }
 
     *surface = scene_surface->surface;
-    /* Find the node corresponding to the ashwc_toplevel at the root of this
-     * surface tree, it is the only one for which we set the data field. */
+
     struct wlr_scene_tree *tree = node->parent;
     while (tree != NULL && tree->node.data == NULL) {
         tree = tree->node.parent;
     }
-    return tree->node.data;
+
+    if (tree == NULL || tree->node.data == NULL) {
+        return NULL;
+    }
+
+    // Verify this data belongs to a toplevel by checking if the xdg_toplevel's
+    // scene_tree matches — layer surfaces set data too so we must distinguish them
+    struct ashwc_toplevel *toplevel = tree->node.data;
+    if (toplevel->scene_tree != tree) {
+        // data belongs to something else (e.g. layer surface)
+        return NULL;
+    }
+
+    return toplevel;
 }
 
 static void reset_cursor_mode(struct ashwc_server *server) {
@@ -499,10 +526,15 @@ static void process_cursor_motion(struct ashwc_server *server, uint32_t time) {
     struct wlr_surface *surface = NULL;
     struct ashwc_toplevel *toplevel = desktop_toplevel_at(server,
             server->cursor->x, server->cursor->y, &surface, &sx, &sy);
+    if (!toplevel && !surface) {
+        // nothing under cursor at all
+        wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
+        wlr_seat_pointer_clear_focus(seat);
+        return;
+    }
+
     if (!toplevel) {
-        /* If there's no toplevel under the cursor, set the cursor image to a
-         * default. This is what makes the cursor image appear when you move it
-         * around the screen, not over any toplevels. */
+        // over a layer surface like waybar
         wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
     }
     if (surface) {
@@ -559,32 +591,26 @@ static void server_cursor_motion_absolute(
 }
 
 static void server_cursor_button(struct wl_listener *listener, void *data) {
-    /* This event is forwarded by the cursor when a pointer emits a button
-     * event. */
-    struct ashwc_server *server =
-        wl_container_of(listener, server, cursor_button);
+    struct ashwc_server *server = wl_container_of(listener, server, cursor_button);
     struct wlr_pointer_button_event *event = data;
-    /* Notify the client with pointer focus that a button press has occurred */
+
     wlr_seat_pointer_notify_button(server->seat,
             event->time_msec, event->button, event->state);
+
     if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
-        /* If you released any buttons, we exit interactive move/resize mode. */
         reset_cursor_mode(server);
-    } else {
-        /* Focus that client if the button was _pressed_ */
-        double sx, sy;
-        struct wlr_surface *surface = NULL;
-        struct ashwc_toplevel *toplevel = desktop_toplevel_at(server,
-                server->cursor->x, server->cursor->y, &surface, &sx, &sy);
-
-        if (toplevel) {
-            focus_toplevel(toplevel);
-        } else if (surface != NULL) {
-            /* Layer surface or other non-toplevel surface - give it pointer focus */
-            wlr_seat_pointer_notify_enter(server->seat, surface, sx, sy);
-        }
-
+        return;
     }
+
+    double sx, sy;
+    struct wlr_surface *surface = NULL;
+    struct ashwc_toplevel *toplevel = desktop_toplevel_at(server,
+            server->cursor->x, server->cursor->y, &surface, &sx, &sy);
+
+    if (toplevel) {
+        focus_toplevel(toplevel);
+    }
+    // layer surfaces already have pointer focus from hover, no action needed
 }
 
 static void server_cursor_axis(struct wl_listener *listener, void *data) {
@@ -1295,6 +1321,9 @@ int main(int argc, char *argv[]) {
             execl("/bin/sh", "/bin/sh", "-c", startup_cmd, (void *)NULL);
         }
     }
+
+    signal(SIGCHLD, SIG_IGN); // auto-reap children
+
     /* Run the Wayland event loop. This does not return until you exit the
      * compositor. Starting the backend rigged up all of the necessary event
      * loop configuration to listen to libinput events, DRM events, generate
