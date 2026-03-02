@@ -175,6 +175,13 @@ static void spawn(const Arg *arg, struct ashwc_server *server) {
     }
 }
 
+static void kill_client(const Arg *arg, struct ashwc_server *server) {
+    if (wl_list_empty(&server->toplevels)) return;
+    struct ashwc_toplevel *toplevel = wl_container_of(
+        server->toplevels.next, toplevel, link);
+    wlr_xdg_toplevel_send_close(toplevel->xdg_toplevel);
+}
+
 static void quit(const Arg *arg, struct ashwc_server *server) {
     wl_display_terminate(server->wl_display);
 }
