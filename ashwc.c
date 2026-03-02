@@ -27,6 +27,9 @@
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_output_management_v1.h>
+#include <wlr/types/wlr_input_device.h>
+#include <wlr/backend/libinput.h>
+#include <libinput.h>
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
 
@@ -333,10 +336,26 @@ static void server_new_keyboard(struct ashwc_server *server,
 
 static void server_new_pointer(struct ashwc_server *server,
         struct wlr_input_device *device) {
-    /* We don't do anything special with pointers. All of our pointer handling
-     * is proxied through wlr_cursor. On another compositor, you might take this
-     * opportunity to do libinput configuration on the device to set
-     * acceleration, etc. */
+    if (wlr_input_device_is_libinput(device)) {
+        struct libinput_device *libinput_device =
+            wlr_libinput_get_device_handle(device);
+
+        if (libinput_device_config_tap_get_finger_count(libinput_device) > 0) {
+            // enable tap to click
+            libinput_device_config_tap_set_enabled(libinput_device,
+                LIBINPUT_CONFIG_TAP_ENABLED);
+            // tap and drag
+            libinput_device_config_tap_set_drag_enabled(libinput_device,
+                LIBINPUT_CONFIG_DRAG_ENABLED);
+        }
+
+        // natural scrolling (optional, remove if you don't want it)
+        if (libinput_device_config_scroll_has_natural_scroll(libinput_device)) {
+            libinput_device_config_scroll_set_natural_scroll_enabled(
+                libinput_device, true);
+        }
+    }
+
     wlr_cursor_attach_input_device(server->cursor, device);
 }
 

@@ -1,7 +1,7 @@
 PKG_CONFIG?=pkg-config
 OUT = ashwc
 SRC = ashwc.c protocols/wlr-layer-shell-unstable-v1-protocol.c protocols/xdg-shell-protocol.c
-PKGS="wlroots-0.20" wayland-server xkbcommon
+PKGS="wlroots-0.20" wayland-server xkbcommon libinput
 CFLAGS_PKG_CONFIG!=$(PKG_CONFIG) --cflags $(PKGS)
 CFLAGS += $(CFLAGS_PKG_CONFIG) -DWLR_USE_UNSTABLE -I. -Iprotocols
 LIBS!=$(PKG_CONFIG) --libs $(PKGS)
