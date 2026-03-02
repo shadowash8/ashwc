@@ -22,6 +22,8 @@
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <wlr/types/wlr_xdg_shell.h>
+#include <wlr/types/wlr_layer_shell_v1.h>
+#include <wlr/types/wlr_output_management_v1.h>
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
 
@@ -68,6 +70,16 @@ struct ashwc_server {
     struct wlr_output_layout *output_layout;
     struct wl_list outputs;
     struct wl_listener new_output;
+
+    struct wlr_layer_shell_v1 *layer_shell;
+    struct wl_listener new_layer_surface;
+    struct wl_list layer_surfaces;
+    
+    struct wlr_output_manager_v1 *output_manager;
+    struct wl_listener output_manager_apply;
+    struct wl_listener output_manager_test;
+    struct wlr_scene_tree *toplevel_tree;
+    struct wlr_scene_tree *layer_tree[4];
 };
 
 struct ashwc_output {
@@ -108,6 +120,18 @@ struct ashwc_keyboard {
     struct wl_listener modifiers;
     struct wl_listener key;
     struct wl_listener destroy;
+};
+
+struct ashwc_layer_surface {
+    struct wl_list link;
+    struct ashwc_server *server;
+    struct wlr_layer_surface_v1 *wlr_layer_surface;
+    struct wlr_scene_layer_surface_v1 *scene_layer;
+
+    struct wl_listener map;
+    struct wl_listener unmap;
+    struct wl_listener destroy;
+    struct wl_listener surface_commit;
 };
 
 typedef union {
@@ -551,7 +575,14 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
         struct wlr_surface *surface = NULL;
         struct ashwc_toplevel *toplevel = desktop_toplevel_at(server,
                 server->cursor->x, server->cursor->y, &surface, &sx, &sy);
-        focus_toplevel(toplevel);
+
+        if (toplevel) {
+            focus_toplevel(toplevel);
+        } else if (surface != NULL) {
+            /* Layer surface or other non-toplevel surface - give it pointer focus */
+            wlr_seat_pointer_notify_enter(server->seat, surface, sx, sy);
+        }
+
     }
 }
 
@@ -818,7 +849,7 @@ static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
     toplevel->server = server;
     toplevel->xdg_toplevel = xdg_toplevel;
     toplevel->scene_tree =
-        wlr_scene_xdg_surface_create(&toplevel->server->scene->tree, xdg_toplevel->base);
+        wlr_scene_xdg_surface_create(toplevel->server->toplevel_tree, xdg_toplevel->base);
     toplevel->scene_tree->node.data = toplevel;
     xdg_toplevel->base->data = toplevel->scene_tree;
 
@@ -890,6 +921,177 @@ static void server_new_xdg_popup(struct wl_listener *listener, void *data) {
 
     popup->destroy.notify = xdg_popup_destroy;
     wl_signal_add(&xdg_popup->events.destroy, &popup->destroy);
+}
+
+static void layer_surface_destroy(struct wl_listener *listener, void *data) {
+    struct ashwc_layer_surface *layer_surface = wl_container_of(listener, layer_surface, destroy);
+    wl_list_remove(&layer_surface->map.link);
+    wl_list_remove(&layer_surface->unmap.link);
+    wl_list_remove(&layer_surface->destroy.link);
+    wl_list_remove(&layer_surface->surface_commit.link);
+    wl_list_remove(&layer_surface->link);
+    free(layer_surface);
+}
+
+static void layer_surface_map(struct wl_listener *listener, void *data) {
+    struct ashwc_layer_surface *layer_surface = wl_container_of(listener, layer_surface, map);
+    
+    /* Make the surface visible in the scene graph */
+    wlr_scene_node_set_enabled(&layer_surface->scene_layer->tree->node, true);
+
+    /* * If the layer surface (like Rofi) wants keyboard focus, 
+     * we must grant it during the map event.
+     */
+    if (layer_surface->wlr_layer_surface->current.keyboard_interactive) {
+        struct wlr_seat *seat = layer_surface->server->seat;
+        struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
+        if (keyboard) {
+            wlr_seat_keyboard_notify_enter(seat, 
+                layer_surface->wlr_layer_surface->surface,
+                keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+        }
+    }
+}
+
+
+static void layer_surface_unmap(struct wl_listener *listener, void *data) {
+    struct ashwc_layer_surface *layer_surface = wl_container_of(listener, layer_surface, unmap);
+    wlr_scene_node_set_enabled(&layer_surface->scene_layer->tree->node, false);
+
+    struct ashwc_server *server = layer_surface->server;
+    struct wlr_seat *seat = server->seat;
+    if (seat->keyboard_state.focused_surface == layer_surface->wlr_layer_surface->surface) {
+        wlr_seat_keyboard_clear_focus(seat);
+        // Restore focus to the top toplevel
+        if (!wl_list_empty(&server->toplevels)) {
+            struct ashwc_toplevel *top = wl_container_of(
+                server->toplevels.next, top, link);
+            focus_toplevel(top);
+        }
+    }
+}
+
+static void layer_surface_commit(struct wl_listener *listener, void *data) {
+    struct ashwc_layer_surface *layer_surface = wl_container_of(listener, layer_surface, surface_commit);
+    struct wlr_layer_surface_v1 *wlr_layer_surface = layer_surface->wlr_layer_surface;
+
+    /* Handle the mandatory Wayland handshake for new surfaces */
+    if (wlr_layer_surface->initial_commit) {
+        wlr_layer_surface_v1_configure(wlr_layer_surface, 0, 0);
+        return;
+    }
+
+    /* * Position the surface. We use the output layout box to 
+     * ensure the scene graph knows where 'center' or 'top' is.
+     */
+    if (wlr_layer_surface->surface->mapped) {
+        struct wlr_box full_area;
+        /* SAFETY: Ensure the output hasn't disappeared */
+        if (wlr_layer_surface->output) {
+            wlr_output_layout_get_box(layer_surface->server->output_layout, 
+                                      wlr_layer_surface->output, &full_area);
+            wlr_scene_layer_surface_v1_configure(layer_surface->scene_layer, 
+                                                 &full_area, &full_area);
+        }
+    }
+}
+
+static void server_new_layer_surface(struct wl_listener *listener, void *data) {
+    struct ashwc_server *server = wl_container_of(listener, server, new_layer_surface);
+    struct wlr_layer_surface_v1 *wlr_layer_surface = data;
+
+    struct ashwc_layer_surface *layer_surface = calloc(1, sizeof(*layer_surface));
+    layer_surface->server = server;
+    layer_surface->wlr_layer_surface = wlr_layer_surface;
+
+    /* Assign an output if the client didn't specify one */
+    if (!wlr_layer_surface->output) {
+        if (wl_list_empty(&server->outputs)) {
+            /* If no outputs exist yet, we cannot map this surface safely */
+            free(layer_surface);
+            return; 
+        }
+        struct ashwc_output *output = wl_container_of(server->outputs.next, output, link);
+        wlr_layer_surface->output = output->wlr_output;
+    }
+
+    // Get which layer this surface wants to be on
+    uint32_t layer_idx = wlr_layer_surface->pending.layer;
+    if (layer_idx > 3) layer_idx = ZWLR_LAYER_SHELL_V1_LAYER_TOP; // safety clamp
+    
+    layer_surface->scene_layer = wlr_scene_layer_surface_v1_create(
+        server->layer_tree[layer_idx], wlr_layer_surface); // ✅ correct tree
+    
+    layer_surface->scene_layer->tree->node.data = layer_surface;
+    wlr_layer_surface->data = layer_surface;
+
+    /* Setup signal listeners */
+    layer_surface->map.notify = layer_surface_map;
+    wl_signal_add(&wlr_layer_surface->surface->events.map, &layer_surface->map);
+    
+    layer_surface->unmap.notify = layer_surface_unmap;
+    wl_signal_add(&wlr_layer_surface->surface->events.unmap, &layer_surface->unmap);
+
+    layer_surface->destroy.notify = layer_surface_destroy;
+    wl_signal_add(&wlr_layer_surface->events.destroy, &layer_surface->destroy);
+
+    layer_surface->surface_commit.notify = layer_surface_commit;
+    wl_signal_add(&wlr_layer_surface->surface->events.commit, &layer_surface->surface_commit);
+
+    /* Track this surface in the server list */
+    wl_list_insert(&server->layer_surfaces, &layer_surface->link);
+}
+
+static void output_manager_apply(struct wl_listener *listener, void *data) {
+    struct ashwc_server *server = wl_container_of(listener, server, output_manager_apply);
+    struct wlr_output_configuration_v1 *config = data;
+    bool ok = true;
+
+    struct wlr_output_configuration_head_v1 *head;
+    wl_list_for_each(head, &config->heads, link) {
+        struct wlr_output *output = head->state.output;
+        struct wlr_output_state state;
+        wlr_output_state_init(&state);
+        wlr_output_head_v1_state_apply(&head->state, &state);
+        if (!wlr_output_commit_state(output, &state)) {
+            ok = false;
+        }
+        wlr_output_state_finish(&state);
+    }
+
+    if (ok) {
+        wlr_output_configuration_v1_send_succeeded(config);
+    } else {
+        wlr_output_configuration_v1_send_failed(config);
+    }
+}
+
+static void output_manager_test(struct wl_listener *listener, void *data) {
+    struct ashwc_server *server = wl_container_of(listener, server, output_manager_test);
+    struct wlr_output_configuration_v1 *config = data;
+    bool ok = true;
+
+    struct wlr_output_configuration_head_v1 *head;
+    wl_list_for_each(head, &config->heads, link) {
+        struct wlr_output *output = head->state.output;
+        struct wlr_output_state state;
+        wlr_output_state_init(&state);
+        wlr_output_head_v1_state_apply(&head->state, &state);
+        
+        // Test only, do NOT commit
+        if (!wlr_output_test_state(output, &state)) {
+            ok = false;
+        }
+        wlr_output_state_finish(&state);
+        
+        if (!ok) break; // no point testing further
+    }
+
+    if (ok) {
+        wlr_output_configuration_v1_send_succeeded(config);
+    } else {
+        wlr_output_configuration_v1_send_failed(config);
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -989,6 +1191,26 @@ int main(int argc, char *argv[]) {
     wl_signal_add(&server.xdg_shell->events.new_toplevel, &server.new_xdg_toplevel);
     server.new_xdg_popup.notify = server_new_xdg_popup;
     wl_signal_add(&server.xdg_shell->events.new_popup, &server.new_xdg_popup);
+    
+    /* Setup layers 
+     * referencs - https://wlroots.pages.freedesktop.org/wlroots/wlr/types/wlr_layer_shell_v1.h.html
+    */
+    server.layer_tree[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND] = wlr_scene_tree_create(&server.scene->tree);
+    server.layer_tree[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM]     = wlr_scene_tree_create(&server.scene->tree);
+    server.toplevel_tree                                     = wlr_scene_tree_create(&server.scene->tree);
+    server.layer_tree[ZWLR_LAYER_SHELL_V1_LAYER_TOP]        = wlr_scene_tree_create(&server.scene->tree);
+    server.layer_tree[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY]    = wlr_scene_tree_create(&server.scene->tree);
+
+    server.layer_shell = wlr_layer_shell_v1_create(server.wl_display, 4);
+    wl_list_init(&server.layer_surfaces);
+    server.new_layer_surface.notify = server_new_layer_surface; 
+    wl_signal_add(&server.layer_shell->events.new_surface, &server.new_layer_surface);
+
+    server.output_manager = wlr_output_manager_v1_create(server.wl_display);
+    server.output_manager_apply.notify = output_manager_apply;
+    wl_signal_add(&server.output_manager->events.apply, &server.output_manager_apply);
+    server.output_manager_test.notify = output_manager_test;
+    wl_signal_add(&server.output_manager->events.test, &server.output_manager_test);
 
     /*
      * Creates a cursor, which is a wlroots utility for tracking the cursor
