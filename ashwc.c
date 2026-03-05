@@ -768,7 +768,11 @@ static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
 
     wl_list_insert(&toplevel->server->toplevels, &toplevel->link);
 
-    focus_toplevel(toplevel);
+    struct wlr_surface *focused = toplevel->server->seat->keyboard_state.focused_surface;
+
+    if (!focused) {
+        focus_toplevel(toplevel);
+    }
 }
 
 static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
