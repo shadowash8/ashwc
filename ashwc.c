@@ -1029,10 +1029,15 @@ static void layer_surface_commit(struct wl_listener *listener, void *data) {
     struct wlr_layer_surface_v1 *wlr_layer_surface = layer_surface->wlr_layer_surface;
 
     /* Handle the mandatory Wayland handshake for new surfaces */
-    if (wlr_layer_surface->initial_commit) {
-        wlr_layer_surface_v1_configure(wlr_layer_surface, 0, 0);
-        return;
-    }
+if (wlr_layer_surface->initial_commit) {
+    struct wlr_box full_area;
+    wlr_output_layout_get_box(layer_surface->server->output_layout, 
+                              wlr_layer_surface->output, &full_area);
+    
+    /* Use the corrected function name here */
+    wlr_layer_surface_v1_configure(wlr_layer_surface, full_area.width, full_area.height);
+    return;
+}
 
     /* * Position the surface. We use the output layout box to 
      * ensure the scene graph knows where 'center' or 'top' is.
