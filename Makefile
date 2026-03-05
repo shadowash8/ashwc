@@ -1,5 +1,7 @@
 PKG_CONFIG?=pkg-config
 OUT = ashwc
+PREFIX ?= /usr/local
+BINDIR  = $(PREFIX)/bin
 SRC = ashwc.c protocols/wlr-layer-shell-unstable-v1-protocol.c protocols/xdg-shell-protocol.c
 PKGS="wlroots-0.20" wayland-server xkbcommon libinput
 CFLAGS_PKG_CONFIG!=$(PKG_CONFIG) --cflags $(PKGS)
@@ -26,6 +28,12 @@ protocols/xdg-shell-protocol.c: protocols
 
 $(OUT): $(SRC) protocols/wlr-layer-shell-unstable-v1-protocol.h protocols/xdg-shell-protocol.h
 	$(CC) $(SRC) -g -Werror $(CFLAGS) $(LDFLAGS) $(LIBS) -o $(OUT)
+
+install: $(OUT)
+	install -Dm755 $(OUT) $(BINDIR)/$(OUT)
+
+uninstall:
+	rm -f $(BINDIR)/$(OUT)
 
 clean:
 	rm -f $(OUT)
