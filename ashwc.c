@@ -152,40 +152,12 @@ struct bind {
     Arg arg;
 };
 
-static void spawn(const Arg *arg, struct ashwc_server *server) {
-    if (fork() == 0) {
-        /* Close all fds the child inherited from the compositor
-         * so clients don't hold onto Wayland sockets etc.
-        */
-        int devnull = open("/dev/null", O_RDWR);
-        if (devnull >= 0) {
-            dup2(devnull, STDIN_FILENO);
-            dup2(devnull, STDOUT_FILENO);
-            dup2(devnull, STDERR_FILENO);
-            if (devnull > STDERR_FILENO) close(devnull);
-        }
-        // Close all other fds
-        int maxfd = sysconf(_SC_OPEN_MAX);
-        for (int fd = STDERR_FILENO + 1; fd < maxfd; fd++) {
-            close(fd);
-        }
-        setsid(); // detach from compositor's process group
-        execvp(((char **)arg->v)[0], (char **)arg->v);
-        _exit(1);
-    }
-}
+/* function declaration */
+static void spawn(const Arg *arg, struct ashwc_server *server);
+static void kill_client(const Arg *arg, struct ashwc_server *server);
+static void quit(const Arg *arg, struct ashwc_server *server);
 
-static void kill_client(const Arg *arg, struct ashwc_server *server) {
-    if (wl_list_empty(&server->toplevels)) return;
-    struct ashwc_toplevel *toplevel = wl_container_of(
-        server->toplevels.next, toplevel, link);
-    wlr_xdg_toplevel_send_close(toplevel->xdg_toplevel);
-}
-
-static void quit(const Arg *arg, struct ashwc_server *server) {
-    wl_display_terminate(server->wl_display);
-}
-
+/* configuration, allows nested code to access the above functions */
 #include "config.h"
 
 static void focus_toplevel(struct ashwc_toplevel *toplevel) {
@@ -1154,6 +1126,40 @@ static void output_manager_test(struct wl_listener *listener, void *data) {
     } else {
         wlr_output_configuration_v1_send_failed(config);
     }
+}
+
+static void spawn(const Arg *arg, struct ashwc_server *server) {
+    if (fork() == 0) {
+        /* Close all fds the child inherited from the compositor
+         * so clients don't hold onto Wayland sockets etc.
+        */
+        int devnull = open("/dev/null", O_RDWR);
+        if (devnull >= 0) {
+            dup2(devnull, STDIN_FILENO);
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            if (devnull > STDERR_FILENO) close(devnull);
+        }
+        // Close all other fds
+        int maxfd = sysconf(_SC_OPEN_MAX);
+        for (int fd = STDERR_FILENO + 1; fd < maxfd; fd++) {
+            close(fd);
+        }
+        setsid(); // detach from compositor's process group
+        execvp(((char **)arg->v)[0], (char **)arg->v);
+        _exit(1);
+    }
+}
+
+static void kill_client(const Arg *arg, struct ashwc_server *server) {
+    if (wl_list_empty(&server->toplevels)) return;
+    struct ashwc_toplevel *toplevel = wl_container_of(
+        server->toplevels.next, toplevel, link);
+    wlr_xdg_toplevel_send_close(toplevel->xdg_toplevel);
+}
+
+static void quit(const Arg *arg, struct ashwc_server *server) {
+    wl_display_terminate(server->wl_display);
 }
 
 int main(int argc, char *argv[]) {
