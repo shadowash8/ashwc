@@ -858,6 +858,39 @@ static void xdg_toplevel_request_resize(
     begin_interactive(toplevel, ASHWC_CURSOR_RESIZE, event->edges);
 }
 
+/* Returns the usable area of an output after subtracting exclusive zones
+ * claimed by layer surfaces (bars, docks, etc.) */
+static struct wlr_box
+get_usable_area(struct ashwc_server *server, struct wlr_output *output)
+{
+    struct wlr_box area;
+    wlr_output_layout_get_box(server->output_layout, output, &area);
+
+    struct ashwc_layer_surface *ls;
+    wl_list_for_each(ls, &server->layer_surfaces, link) {
+        if (ls->wlr_layer_surface->output != output) continue;
+        if (!ls->wlr_layer_surface->surface->mapped) continue;
+
+        uint32_t anchor = ls->wlr_layer_surface->current.anchor;
+        int32_t  zone   = ls->wlr_layer_surface->current.exclusive_zone;
+        if (zone <= 0) continue;
+
+        if (anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) {
+            area.y      += zone;
+            area.height -= zone;
+        } else if (anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM) {
+            area.height -= zone;
+        } else if (anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) {
+            area.x     += zone;
+            area.width -= zone;
+        } else if (anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT) {
+            area.width -= zone;
+        }
+    }
+
+    return area;
+}
+
 static void xdg_toplevel_request_maximize(
         struct wl_listener *listener, void *data) {
     struct ashwc_toplevel *toplevel =
@@ -879,8 +912,8 @@ static void xdg_toplevel_request_maximize(
             /* 1. Define a box on the stack */
             struct wlr_box output_box;
 
-            /* 2. Pass the address (&output_box) as the 3rd argument */
-            wlr_output_layout_get_box(toplevel->server->output_layout, output, &output_box);
+            /* 2. Get usable area */
+            output_box = get_usable_area(toplevel->server, output);
 
             /* 3. Now use output_box.x, output_box.width, etc. */
             toplevel->x = output_box.x;
