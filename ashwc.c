@@ -262,7 +262,7 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
     bool handled = false;
     uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
 
-    if (modifiers && event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+    if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
         /* Try shifted syms first */
         for (int i = 0; i < nsyms && !handled; i++)
             handled = handle_keybinding(server, modifiers, syms[i]);
