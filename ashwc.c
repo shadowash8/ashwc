@@ -110,6 +110,7 @@ struct ashwc_toplevel {
     struct wl_listener request_resize;
     struct wl_listener request_maximize;
     struct wl_listener request_fullscreen;
+    int x, y;
 };
 
 struct ashwc_popup {
@@ -844,17 +845,37 @@ static void xdg_toplevel_request_resize(
 
 static void xdg_toplevel_request_maximize(
         struct wl_listener *listener, void *data) {
-    /* This event is raised when a client would like to maximize itself,
-     * typically because the user clicked on the maximize button on client-side
-     * decorations. ashwc doesn't support maximization, but to conform to
-     * xdg-shell protocol we still must send a configure.
-     * wlr_xdg_surface_schedule_configure() is used to send an empty reply.
-     * However, if the request was sent before an initial commit, we don't do
-     * anything and let the client finish the initial surface setup. */
     struct ashwc_toplevel *toplevel =
         wl_container_of(listener, toplevel, request_maximize);
-    if (toplevel->xdg_toplevel->base->initialized) {
-        wlr_xdg_surface_schedule_configure(toplevel->xdg_toplevel->base);
+    struct wlr_xdg_toplevel *wlr_toplevel = toplevel->xdg_toplevel;
+    struct wlr_output *output = wlr_output_layout_output_at(
+        toplevel->server->output_layout, toplevel->x, toplevel->y);
+
+    if (!wlr_toplevel->base->initialized) {
+        return;
+    }
+
+    /* If already maximized, we 'unmaximize' by sending 0,0 size */
+    if (wlr_toplevel->current.maximized) {
+        wlr_xdg_toplevel_set_maximized(wlr_toplevel, false);
+        wlr_xdg_toplevel_set_size(wlr_toplevel, 0, 0);
+    } else {
+        if (output) {
+            /* 1. Define a box on the stack */
+            struct wlr_box output_box;
+
+            /* 2. Pass the address (&output_box) as the 3rd argument */
+            wlr_output_layout_get_box(toplevel->server->output_layout, output, &output_box);
+
+            /* 3. Now use output_box.x, output_box.width, etc. */
+            toplevel->x = output_box.x;
+            toplevel->y = output_box.y;
+
+            wlr_scene_node_set_position(&toplevel->scene_tree->node, toplevel->x, toplevel->y);
+
+            wlr_xdg_toplevel_set_maximized(wlr_toplevel, true);
+            wlr_xdg_toplevel_set_size(wlr_toplevel, output_box.width, output_box.height);
+        }
     }
 }
 
@@ -863,8 +884,33 @@ static void xdg_toplevel_request_fullscreen(
     /* Just as with request_maximize, we must send a configure here. */
     struct ashwc_toplevel *toplevel =
         wl_container_of(listener, toplevel, request_fullscreen);
+    struct wlr_xdg_toplevel *wlr_toplevel = toplevel->xdg_toplevel;
+    struct wlr_output *output = wlr_output_layout_output_at(
+        toplevel->server->output_layout, toplevel->x, toplevel->y);
+
     if (toplevel->xdg_toplevel->base->initialized) {
-        wlr_xdg_surface_schedule_configure(toplevel->xdg_toplevel->base);
+        /* If already fullscreen, we 'unfullscreen' by sending 0,0 size */
+        if (wlr_toplevel->current.fullscreen) {
+            wlr_xdg_toplevel_set_fullscreen(wlr_toplevel, false);
+            wlr_xdg_toplevel_set_size(wlr_toplevel, 0, 0);
+        } else {
+        if (output) {
+            /* 1. Define a box on the stack */
+            struct wlr_box output_box;
+
+            /* 2. Pass the address (&output_box) as the 3rd argument */
+            wlr_output_layout_get_box(toplevel->server->output_layout, output, &output_box);
+
+            /* 3. Now use output_box.x, output_box.width, etc. */
+            toplevel->x = output_box.x;
+            toplevel->y = output_box.y;
+
+            wlr_scene_node_set_position(&toplevel->scene_tree->node, toplevel->x, toplevel->y);
+
+            wlr_xdg_toplevel_set_fullscreen(wlr_toplevel, true);
+            wlr_xdg_toplevel_set_size(wlr_toplevel, output_box.width, output_box.height);
+        }
+    }
     }
 }
 
