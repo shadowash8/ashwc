@@ -77,6 +77,8 @@ struct ashwc_server {
     struct wl_list outputs;
     struct wl_listener new_output;
 
+    uint32_t tags;
+
     struct wlr_layer_shell_v1 *layer_shell;
     struct wl_listener new_layer_surface;
     struct wl_list layer_surfaces;
@@ -110,6 +112,8 @@ struct ashwc_toplevel {
     struct wl_listener request_resize;
     struct wl_listener request_maximize;
     struct wl_listener request_fullscreen;
+
+    uint32_t tags;
     int x, y;
 };
 
@@ -157,6 +161,10 @@ struct bind {
 static void spawn(const Arg *arg, struct ashwc_server *server);
 static void kill_client(const Arg *arg, struct ashwc_server *server);
 static void quit(const Arg *arg, struct ashwc_server *server);
+static void view_tag(const Arg *arg, struct ashwc_server *server);
+static void toggle_tag_view(const Arg *arg, struct ashwc_server *server);
+static void tag_toplevel(const Arg *arg, struct ashwc_server *server);
+static void move_to_tag(const Arg *arg, struct ashwc_server *server);
 
 /* configuration, allows nested code to access the above functions */
 #include "config.h"
@@ -232,35 +240,38 @@ static bool handle_keybinding(struct ashwc_server *server, uint32_t mods, xkb_ke
     return false;
 }
 
-static void keyboard_handle_key(
-        struct wl_listener *listener, void *data) {
-    /* This event is raised when a key is pressed or released. */
-    struct ashwc_keyboard *keyboard =
-        wl_container_of(listener, keyboard, key);
+static void keyboard_handle_key(struct wl_listener *listener, void *data) {
+    struct ashwc_keyboard *keyboard = wl_container_of(listener, keyboard, key);
     struct ashwc_server *server = keyboard->server;
     struct wlr_keyboard_key_event *event = data;
     struct wlr_seat *seat = server->seat;
 
-    /* Translate libinput keycode -> xkbcommon */
     uint32_t keycode = event->keycode + 8;
-    /* Get a list of keysyms based on the keymap for this keyboard */
+
+    /* Get keysyms for ALL levels so we can check unshifted too */
     const xkb_keysym_t *syms;
     int nsyms = xkb_state_key_get_syms(
-            keyboard->wlr_keyboard->xkb_state, keycode, &syms);
+        keyboard->wlr_keyboard->xkb_state, keycode, &syms);
+
+    /* Also get the base (unshifted) keysyms */
+    const xkb_keysym_t *base_syms;
+    int base_nsyms = xkb_keymap_key_get_syms_by_level(
+        xkb_state_get_keymap(keyboard->wlr_keyboard->xkb_state),
+        keycode, 0, 0, &base_syms);
 
     bool handled = false;
     uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
-    if (modifiers &&
-            event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
-        /* If a modifier is held down and this button was _pressed_, we attempt to
-         * process it as a compositor keybinding. */
-        for (int i = 0; i < nsyms; i++) {
+
+    if (modifiers && event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+        /* Try shifted syms first */
+        for (int i = 0; i < nsyms && !handled; i++)
             handled = handle_keybinding(server, modifiers, syms[i]);
-        }
+        /* Then try base (unshifted) syms — fixes MOD+SHIFT+1 matching XKB_KEY_1 */
+        for (int i = 0; i < base_nsyms && !handled; i++)
+            handled = handle_keybinding(server, modifiers, base_syms[i]);
     }
 
     if (!handled) {
-        /* Otherwise, we pass it along to the client. */
         wlr_seat_set_keyboard(seat, keyboard->wlr_keyboard);
         wlr_seat_keyboard_notify_key(seat, event->time_msec,
             event->keycode, event->state);
@@ -739,6 +750,10 @@ static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
     /* Called when the surface is mapped, or ready to display on-screen. */
     struct ashwc_toplevel *toplevel = wl_container_of(listener, toplevel, map);
 
+    /* Assign to the current tag if none set yet */
+    if (toplevel->tags == 0)
+        toplevel->tags = toplevel->server->tags;
+
     wl_list_insert(&toplevel->server->toplevels, &toplevel->link);
 
     struct wlr_surface *focused = toplevel->server->seat->keyboard_state.focused_surface;
@@ -1174,6 +1189,81 @@ static void output_manager_test(struct wl_listener *listener, void *data) {
     }
 }
 
+/* Tags: server->tags is the currently visible tag bitmask.
+ * Each toplevel->tags is the bitmask of tags it belongs to.
+ * A toplevel is visible if (toplevel->tags & server->tags) != 0.
+ */
+
+static void apply_tag_visibility(struct ashwc_server *server) {
+    struct ashwc_toplevel *toplevel;
+    wl_list_for_each(toplevel, &server->toplevels, link) {
+        bool visible = (toplevel->tags & server->tags) != 0;
+        wlr_scene_node_set_enabled(&toplevel->scene_tree->node, visible);
+    }
+
+    /* If the currently focused surface is now hidden, clear focus and
+     * give it to the first visible toplevel instead. */
+    struct wlr_seat *seat = server->seat;
+    struct wlr_surface *focused = seat->keyboard_state.focused_surface;
+    bool focused_visible = false;
+
+    if (focused) {
+        wl_list_for_each(toplevel, &server->toplevels, link) {
+            if (toplevel->xdg_toplevel->base->surface == focused &&
+                    (toplevel->tags & server->tags)) {
+                focused_visible = true;
+                break;
+            }
+        }
+    }
+
+    if (!focused_visible) {
+        wlr_seat_keyboard_clear_focus(seat);
+        wl_list_for_each(toplevel, &server->toplevels, link) {
+            if (toplevel->tags & server->tags) {
+                focus_toplevel(toplevel);
+                break;
+            }
+        }
+    }
+}
+
+/* Switch view to tag n exclusively */
+static void view_tag(const Arg *arg, struct ashwc_server *server) {
+    uint32_t mask = 1u << arg->i;
+    if (server->tags == mask) return; /* already there */
+    server->tags = mask;
+    apply_tag_visibility(server);
+}
+
+/* Toggle a tag's visibility (add/remove from current view) */
+static void toggle_tag_view(const Arg *arg, struct ashwc_server *server) {
+    uint32_t mask = 1u << arg->i;
+    uint32_t new_tags = server->tags ^ mask;
+    if (new_tags == 0) return; /* don't allow empty view */
+    server->tags = new_tags;
+    apply_tag_visibility(server);
+}
+
+/* Assign the focused window to tag n exclusively */
+static void tag_toplevel(const Arg *arg, struct ashwc_server *server) {
+    if (wl_list_empty(&server->toplevels)) return;
+    struct ashwc_toplevel *toplevel = wl_container_of(
+        server->toplevels.next, toplevel, link);
+    toplevel->tags = 1u << arg->i;
+    apply_tag_visibility(server);
+}
+
+/* Move focused window to tag n and switch view to it */
+static void move_to_tag(const Arg *arg, struct ashwc_server *server) {
+    if (wl_list_empty(&server->toplevels)) return;
+    struct ashwc_toplevel *toplevel = wl_container_of(
+        server->toplevels.next, toplevel, link);
+    toplevel->tags = 1u << arg->i;
+    server->tags   = 1u << arg->i;
+    apply_tag_visibility(server);
+}
+
 static void spawn(const Arg *arg, struct ashwc_server *server) {
     if (fork() == 0) {
         /* Close all fds the child inherited from the compositor
@@ -1288,6 +1378,9 @@ int main(int argc, char *argv[]) {
     wl_list_init(&server.outputs);
     server.new_output.notify = server_new_output;
     wl_signal_add(&server.backend->events.new_output, &server.new_output);
+
+    /* Initlilize server tags starting from 1 */
+    server.tags = 1u << 0;
 
     /* Create a scene graph. This is a wlroots abstraction that handles all
      * rendering and damage tracking. All the compositor author needs to do
