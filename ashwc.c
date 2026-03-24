@@ -28,6 +28,9 @@
 #include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_output_management_v1.h>
 #include <wlr/types/wlr_input_device.h>
+#include <wlr/types/wlr_data_control_v1.h>
+#include <wlr/types/wlr_ext_data_control_v1.h>
+#include <wlr/types/wlr_primary_selection_v1.h>
 #include <wlr/backend/libinput.h>
 #include <libinput.h>
 #include <wlr/util/log.h>
@@ -1398,6 +1401,9 @@ int main(int argc, char *argv[]) {
     wlr_compositor_create(server.wl_display, 5, server.renderer);
     wlr_subcompositor_create(server.wl_display);
     wlr_data_device_manager_create(server.wl_display);
+    wlr_data_control_manager_v1_create(server.wl_display);
+    wlr_ext_data_control_manager_v1_create(server.wl_display, 1);
+    wlr_primary_selection_v1_device_manager_create(server.wl_display);
 
     /* Creates an output layout, which a wlroots utility for working with an
      * arrangement of screens in a physical layout. */
