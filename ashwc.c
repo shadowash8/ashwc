@@ -1061,7 +1061,15 @@ static void layer_surface_destroy(struct wl_listener *listener, void *data) {
 
 static void layer_surface_map(struct wl_listener *listener, void *data) {
     struct ashwc_layer_surface *layer_surface = wl_container_of(listener, layer_surface, map);
-    
+    struct wlr_layer_surface_v1 *wlr_layer_surface = layer_surface->wlr_layer_surface;
+
+    struct wlr_box full_area;
+    if (wlr_layer_surface->output) {
+        wlr_output_layout_get_box(layer_surface->server->output_layout, 
+                                  wlr_layer_surface->output, &full_area);
+        wlr_scene_layer_surface_v1_configure(layer_surface->scene_layer, &full_area, &full_area);
+    }
+
     /* Make the surface visible in the scene graph */
     wlr_scene_node_set_enabled(&layer_surface->scene_layer->tree->node, true);
 
@@ -1101,29 +1109,13 @@ static void layer_surface_commit(struct wl_listener *listener, void *data) {
     struct ashwc_layer_surface *layer_surface = wl_container_of(listener, layer_surface, surface_commit);
     struct wlr_layer_surface_v1 *wlr_layer_surface = layer_surface->wlr_layer_surface;
 
-    /* Handle the mandatory Wayland handshake for new surfaces */
-if (wlr_layer_surface->initial_commit) {
-    struct wlr_box full_area;
-    wlr_output_layout_get_box(layer_surface->server->output_layout, 
+    if (wlr_layer_surface->initial_commit) {
+        struct wlr_box full_area;
+        wlr_output_layout_get_box(layer_surface->server->output_layout, 
                               wlr_layer_surface->output, &full_area);
     
-    /* Use the corrected function name here */
-    wlr_layer_surface_v1_configure(wlr_layer_surface, full_area.width, full_area.height);
-    return;
-}
-
-    /* * Position the surface. We use the output layout box to 
-     * ensure the scene graph knows where 'center' or 'top' is.
-     */
-    if (wlr_layer_surface->surface->mapped) {
-        struct wlr_box full_area;
-        /* SAFETY: Ensure the output hasn't disappeared */
-        if (wlr_layer_surface->output) {
-            wlr_output_layout_get_box(layer_surface->server->output_layout, 
-                                      wlr_layer_surface->output, &full_area);
-            wlr_scene_layer_surface_v1_configure(layer_surface->scene_layer, 
-                                                 &full_area, &full_area);
-        }
+        wlr_layer_surface_v1_configure(wlr_layer_surface, full_area.width, full_area.height);
+        return;
     }
 }
 
@@ -1135,10 +1127,8 @@ static void server_new_layer_surface(struct wl_listener *listener, void *data) {
     layer_surface->server = server;
     layer_surface->wlr_layer_surface = wlr_layer_surface;
 
-    /* Assign an output if the client didn't specify one */
     if (!wlr_layer_surface->output) {
         if (wl_list_empty(&server->outputs)) {
-            /* If no outputs exist yet, we cannot map this surface safely */
             free(layer_surface);
             return; 
         }
@@ -1146,12 +1136,11 @@ static void server_new_layer_surface(struct wl_listener *listener, void *data) {
         wlr_layer_surface->output = output->wlr_output;
     }
 
-    // Get which layer this surface wants to be on
     uint32_t layer_idx = wlr_layer_surface->pending.layer;
-    if (layer_idx > 3) layer_idx = ZWLR_LAYER_SHELL_V1_LAYER_TOP; // safety clamp
+    if (layer_idx > 3) layer_idx = ZWLR_LAYER_SHELL_V1_LAYER_TOP;
     
     layer_surface->scene_layer = wlr_scene_layer_surface_v1_create(
-        server->layer_tree[layer_idx], wlr_layer_surface); // ✅ correct tree
+        server->layer_tree[layer_idx], wlr_layer_surface);
     
     layer_surface->scene_layer->tree->node.data = layer_surface;
     wlr_layer_surface->data = layer_surface;
