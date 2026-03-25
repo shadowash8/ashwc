@@ -118,6 +118,7 @@ struct ashwc_toplevel {
 
     uint32_t tags;
     int x, y;
+    int prev_x, prev_y;
 };
 
 struct ashwc_popup {
@@ -467,6 +468,12 @@ static void reset_cursor_mode(struct ashwc_server *server) {
 static void process_cursor_move(struct ashwc_server *server) {
     /* Move the grabbed toplevel to the new position. */
     struct ashwc_toplevel *toplevel = server->grabbed_toplevel;
+
+    /* Update the new coordinates */
+    toplevel->x = server->cursor->x - server->grab_x;
+    toplevel->y = server->cursor->y - server->grab_y;
+    
+    /* move window the new coordinates */
     wlr_scene_node_set_position(&toplevel->scene_tree->node,
         server->cursor->x - server->grab_x,
         server->cursor->y - server->grab_y);
@@ -770,6 +777,9 @@ static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
         toplevel->x = output_box.x + (output_box.width - geom.width) / 2;
         toplevel->y = output_box.y + (output_box.height - geom.height) / 2;
 
+        toplevel->prev_x = toplevel->x;
+        toplevel->prev_y = toplevel->y;
+
         // Move the scene node so it actually renders there
         wlr_scene_node_set_position(&toplevel->scene_tree->node, toplevel->x, toplevel->y);
     }
@@ -929,20 +939,29 @@ static void xdg_toplevel_request_maximize(
 
     /* If already maximized, we 'unmaximize' by sending 0,0 size */
     if (wlr_toplevel->current.maximized) {
+        /* Restore old remembered position */
+        toplevel->x = toplevel->prev_x;
+        toplevel->y = toplevel->prev_y;
+        
         wlr_xdg_toplevel_set_maximized(wlr_toplevel, false);
         wlr_xdg_toplevel_set_size(wlr_toplevel, 0, 0);
+        wlr_scene_node_set_position(&toplevel->scene_tree->node, toplevel->prev_x, toplevel->prev_y);
     } else {
         if (output) {
-            /* 1. Define a box on the stack */
+            /* Define a box on the stack */
             struct wlr_box output_box;
 
-            /* 2. Get usable area */
+            /* Save position before maximize */
+            toplevel->prev_x = toplevel->x;
+            toplevel->prev_y = toplevel->y;
+
+            /* Get usable area */
             output_box = get_usable_area(toplevel->server, output);
 
-            /* 3. Now use output_box.x, output_box.width, etc. */
+            /* Now use output_box.x, output_box.width, etc. */
             toplevel->x = output_box.x;
             toplevel->y = output_box.y;
-
+            
             wlr_scene_node_set_position(&toplevel->scene_tree->node, toplevel->x, toplevel->y);
 
             wlr_xdg_toplevel_set_maximized(wlr_toplevel, true);
