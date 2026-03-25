@@ -18,6 +18,7 @@ static struct bind binds[] = {
     /* Modifier         Keysym              Function           Argument */
     { MOD,              XKB_KEY_Return,     spawn,             {.v = termcmd} },
     { MOD,              XKB_KEY_q,          kill_client,       {.v = NULL}    },
+    { MOD,              XKB_KEY_a,          maximize,          {.v = NULL}    },
     { MOD,              XKB_KEY_Escape,     quit,              {.v = NULL}    },
     { MOD,              XKB_KEY_Tab,        focus_next_window, {.v = NULL}    },
 
