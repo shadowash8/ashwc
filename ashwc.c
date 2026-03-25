@@ -169,6 +169,7 @@ static void view_tag(const Arg *arg, struct ashwc_server *server);
 static void toggle_tag_view(const Arg *arg, struct ashwc_server *server);
 static void tag_toplevel(const Arg *arg, struct ashwc_server *server);
 static void move_to_tag(const Arg *arg, struct ashwc_server *server);
+static void focus_next_window(const Arg *arg, struct ashwc_server *server);
 
 /* configuration, allows nested code to access the above functions */
 #include "config.h"
@@ -1327,6 +1328,23 @@ static void move_to_tag(const Arg *arg, struct ashwc_server *server) {
     toplevel->tags = 1u << arg->i;
     server->tags   = 1u << arg->i;
     apply_tag_visibility(server);
+}
+
+void focus_next_window(const Arg *arg, struct ashwc_server *server) {
+    if (wl_list_empty(&server->toplevels) || wl_list_length(&server->toplevels) < 2) return;
+
+    /* Get the window currently at the top of the list */
+    struct ashwc_toplevel *current = wl_container_of(server->toplevels.next, current, link);
+    
+    /* Get the next one in the list */
+    struct ashwc_toplevel *next = wl_container_of(current->link.next, next, link);
+
+    /* If we hit the end of the list, wrap back to the start */
+    if (&next->link == &server->toplevels) {
+        next = wl_container_of(server->toplevels.next, next, link);
+    }
+
+    focus_toplevel(next);
 }
 
 static void spawn(const Arg *arg, struct ashwc_server *server) {
