@@ -753,6 +753,27 @@ static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
     /* Called when the surface is mapped, or ready to display on-screen. */
     struct ashwc_toplevel *toplevel = wl_container_of(listener, toplevel, map);
 
+    struct wlr_box geom;
+        geom = toplevel->xdg_toplevel->base->geometry;
+
+    struct wlr_output *output = wlr_output_layout_output_at(
+        toplevel->server->output_layout, 
+        toplevel->server->cursor->x, 
+        toplevel->server->cursor->y
+    );
+    
+    if (output) {
+        struct wlr_box output_box;
+        wlr_output_layout_get_box(toplevel->server->output_layout, output, &output_box);
+
+        // Calculate centered coordinates
+        toplevel->x = output_box.x + (output_box.width - geom.width) / 2;
+        toplevel->y = output_box.y + (output_box.height - geom.height) / 2;
+
+        // Move the scene node so it actually renders there
+        wlr_scene_node_set_position(&toplevel->scene_tree->node, toplevel->x, toplevel->y);
+    }
+    
     /* Assign to the current tag if none set yet */
     if (toplevel->tags == 0)
         toplevel->tags = toplevel->server->tags;
