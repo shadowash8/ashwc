@@ -23,6 +23,9 @@ void
 layout_master(struct ashwc_workspace *);
 
 void 
+layout_grid(struct ashwc_workspace *);
+
+void 
 layout_monocle(struct ashwc_workspace *);
 
 void 
@@ -59,3 +62,8 @@ layout_monocle_prev(struct ashwc_workspace *workspace,
 void
 layout_monocle_swap(struct ashwc_toplevel *a,
                     struct ashwc_toplevel *b);
+
+struct ashwc_toplevel *
+layout_grid_find_neighbor(struct ashwc_workspace *workspace,
+                          struct ashwc_toplevel *current,
+                          enum ashwc_direction direction);

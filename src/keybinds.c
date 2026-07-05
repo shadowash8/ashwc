@@ -293,29 +293,50 @@ keybind_move_focus(void *data) {
     return;
   }
 
-  if (workspace->layout == ASHWC_LAYOUT_MONOCLE) {
-    struct ashwc_toplevel *other = NULL;
-
-    switch (direction) {
-    case ASHWC_UP:
-    case ASHWC_LEFT:
-      other = layout_monocle_prev(workspace, toplevel);
-        break;
-
-    case ASHWC_DOWN:
-    case ASHWC_RIGHT:
-        other = layout_monocle_next(workspace, toplevel);
-        break;
+  switch (workspace->layout) {
+  
+    case ASHWC_LAYOUT_MONOCLE: {
+        struct ashwc_toplevel *other = NULL;
+  
+        switch (direction) {
+        case ASHWC_UP:
+        case ASHWC_LEFT:
+            other = layout_monocle_prev(workspace, toplevel);
+            break;
+  
+        case ASHWC_DOWN:
+        case ASHWC_RIGHT:
+            other = layout_monocle_next(workspace, toplevel);
+            break;
+        }
+  
+        if (other != NULL) {
+            focus_toplevel(other);
+            cursor_jump_focused_toplevel();
+        }
+  
+        return;
     }
-
-    if (other != NULL) {
-        focus_toplevel(other);
-        cursor_jump_focused_toplevel();
+  
+    case ASHWC_LAYOUT_GRID: {
+        struct ashwc_toplevel *other =
+            layout_grid_find_neighbor(workspace, toplevel, direction);
+  
+        if (other != NULL && other != toplevel) {
+            focus_toplevel(other);
+            cursor_jump_focused_toplevel();
+        }
+  
+        return;
     }
-
-    return;
-}
-
+  
+    case ASHWC_LAYOUT_MASTER:
+        break;
+  
+    default:
+        break;
+  }
+  
   struct wl_list *next;
   if(toplevel_is_master(toplevel)) {
     switch(direction) {
@@ -421,27 +442,48 @@ keybind_swap_focused_toplevel(void *data) {
     return;
   }
 
-  if (workspace->layout == ASHWC_LAYOUT_MONOCLE) {
-    struct ashwc_toplevel *other = NULL;
-
-    switch (direction) {
-    case ASHWC_UP:
-    case ASHWC_LEFT:
-        other = layout_monocle_prev(workspace, toplevel);
-        break;
-
-    case ASHWC_DOWN:
-    case ASHWC_RIGHT:
-        other = layout_monocle_next(workspace, toplevel);
-        break;
+  switch (workspace->layout) {
+    case ASHWC_LAYOUT_MONOCLE: {
+        struct ashwc_toplevel *other = NULL;
+  
+        switch (direction) {
+        case ASHWC_UP:
+        case ASHWC_LEFT:
+            other = layout_monocle_prev(workspace, toplevel);
+            break;
+  
+        case ASHWC_DOWN:
+        case ASHWC_RIGHT:
+            other = layout_monocle_next(workspace, toplevel);
+            break;
+        }
+  
+        if (other != NULL) {
+            focus_toplevel(other);
+            cursor_jump_focused_toplevel();
+        }
+  
+        return;
     }
-
-    if (other != NULL && other != toplevel)
-        layout_swap_tiled_toplevels(toplevel, other);
-
-    return;
-}
-
+  
+    case ASHWC_LAYOUT_GRID: {
+        struct ashwc_toplevel *other =
+            layout_grid_find_neighbor(workspace, toplevel, direction);
+  
+        if (other != NULL && other != toplevel) {
+            focus_toplevel(other);
+            cursor_jump_focused_toplevel();
+        }
+  
+        return;
+    }
+  
+    case ASHWC_LAYOUT_MASTER:
+        break;
+  
+    default:
+        break;
+  }
   struct wl_list *next;
   if(toplevel_is_master(toplevel)) {
     switch(direction) {
