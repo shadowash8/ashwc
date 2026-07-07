@@ -1,29 +1,28 @@
-#include <scenefx/types/wlr_scene.h>
 #include "output.h"
+#include <scenefx/types/wlr_scene.h>
 
 #include "ashwc.h"
 #include "config.h"
+#include "ipc.h"
 #include "layout.h"
 #include "pointer.h"
 #include "rendering.h"
-#include "workspace.h"
 #include "toplevel.h"
-#include "ipc.h"
+#include "workspace.h"
 
 #include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wayland-util.h>
-#include <wlr/util/log.h>
+#include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_scene.h>
-#include <wlr/types/wlr_cursor.h>
+#include <wlr/util/log.h>
 
 extern struct ashwc_server server;
 
-void
-server_handle_new_output(struct wl_listener *listener, void *data) {
+void server_handle_new_output(struct wl_listener *listener, void *data) {
   struct wlr_output *wlr_output = data;
 
   /* we try to find the config for this output */
@@ -31,14 +30,15 @@ server_handle_new_output(struct wl_listener *listener, void *data) {
 
   struct output_config *o;
   wl_list_for_each(o, &server.config->outputs, link) {
-    if(strcmp(o->name, wlr_output->name) == 0) {
+    if (strcmp(o->name, wlr_output->name) == 0) {
       output_config = o;
       break;
     }
   }
 
   bool success = output_initialize(wlr_output, output_config);
-  if(!success) return;
+  if (!success)
+    return;
 
   /* allocates and configures our state for this output */
   struct ashwc_output *output = calloc(1, sizeof(*output));
@@ -59,19 +59,21 @@ server_handle_new_output(struct wl_listener *listener, void *data) {
 
   /* we check if this output already has some workspaces created */
   bool found = output_transfer_existing_workspaces(output);
-  if(!found) {
+  if (!found) {
     struct workspace_config *c;
     /* we go in reverse to first add workspaces that were on top of config */
     wl_list_for_each_reverse(c, &server.config->workspaces, link) {
-      if(strcmp(c->output, wlr_output->name) == 0) {
+      if (strcmp(c->output, wlr_output->name) == 0) {
         workspace_create_for_output(output, c);
       }
     }
   }
 
-  /* if we didnt find any workspace config, then we give it workspace with index 0 */
-  if(wl_list_empty(&output->workspaces)) {
-    wlr_log(WLR_ERROR, "no workspace config specified for output %s."
+  /* if we didnt find any workspace config, then we give it workspace with index
+   * 0 */
+  if (wl_list_empty(&output->workspaces)) {
+    wlr_log(WLR_ERROR,
+            "no workspace config specified for output %s."
             "using default workspace 0. please add a valid workspace config.",
             wlr_output->name);
 
@@ -94,16 +96,17 @@ server_handle_new_output(struct wl_listener *listener, void *data) {
 
   wl_list_insert(&server.outputs, &output->link);
 
-  output->scene_output = wlr_scene_output_create(server.scene, output->wlr_output);
+  output->scene_output =
+      wlr_scene_output_create(server.scene, output->wlr_output);
   struct wlr_box output_box = output_add_to_layout(output, output_config);
 
   /* if there were some existing workspaces then we reconfigure them */
-  if(found) {
+  if (found) {
     struct ashwc_workspace *w;
     wl_list_for_each(w, &output->workspaces, link) {
       layout_set_pending_state(w);
       /* this pathces some ghosts that might have been left in the scene */
-      if(w != output->active_workspace) {
+      if (w != output->active_workspace) {
         struct ashwc_toplevel *t;
         wl_list_for_each(t, &w->floating_toplevels, link) {
           wlr_scene_node_set_enabled(&t->scene_tree->node, false);
@@ -118,24 +121,23 @@ server_handle_new_output(struct wl_listener *listener, void *data) {
     }
   }
 
-  if(server.config->blur) {
-    output->blur = wlr_scene_optimized_blur_create(&server.scene->tree,
-                                                   wlr_output->width, wlr_output->height);
-    wlr_scene_set_blur_data(
-        server.scene,
-        server.config->blur_params.num_passes,
-        server.config->blur_params.radius,
-        server.config->blur_params.noise,
-        server.config->blur_params.brightness,
-        server.config->blur_params.contrast,
-        server.config->blur_params.saturation
-    );
-    wlr_scene_node_place_above(&output->blur->node, &server.background_tree->node);
-    wlr_scene_node_set_position(&output->blur->node, output_box.x, output_box.y);
+  if (server.config->blur) {
+    output->blur = wlr_scene_optimized_blur_create(
+        &server.scene->tree, wlr_output->width, wlr_output->height);
+    wlr_scene_set_blur_data(server.scene, server.config->blur_params.num_passes,
+                            server.config->blur_params.radius,
+                            server.config->blur_params.noise,
+                            server.config->blur_params.brightness,
+                            server.config->blur_params.contrast,
+                            server.config->blur_params.saturation);
+    wlr_scene_node_place_above(&output->blur->node,
+                               &server.background_tree->node);
+    wlr_scene_node_set_position(&output->blur->node, output_box.x,
+                                output_box.y);
   }
 
   /* if first output then set server's active workspace to this one */
-  if(server.active_workspace == NULL) {
+  if (server.active_workspace == NULL) {
     server.active_workspace = output->active_workspace;
   }
 }
@@ -144,7 +146,7 @@ struct ashwc_workspace *
 output_find_owned_workspace(struct ashwc_output *output) {
   struct ashwc_workspace *w;
   wl_list_for_each(w, &output->workspaces, link) {
-    if(strcmp(w->config->output, output->wlr_output->name) == 0) {
+    if (strcmp(w->config->output, output->wlr_output->name) == 0) {
       return w;
     }
   }
@@ -152,19 +154,21 @@ output_find_owned_workspace(struct ashwc_output *output) {
   return NULL;
 }
 
-bool
-output_transfer_existing_workspaces(struct ashwc_output *output) {
-  /* if this output is reconnected then its workspaces are on some other monitor,
-   * we try to find it; this is not efficient as things could be flagged, i am just lazy rn */
+bool output_transfer_existing_workspaces(struct ashwc_output *output) {
+  /* if this output is reconnected then its workspaces are on some other
+   * monitor, we try to find it; this is not efficient as things could be
+   * flagged, i am just lazy rn */
   bool found = false;
   struct ashwc_output *o;
   struct ashwc_workspace *w, *tmp;
   wl_list_for_each(o, &server.outputs, link) {
     wl_list_for_each_safe(w, tmp, &o->workspaces, link) {
-      if(w->config != NULL && strcmp(w->config->output, output->wlr_output->name) == 0) {
+      if (w->config != NULL &&
+          strcmp(w->config->output, output->wlr_output->name) == 0) {
         /* fix that outputs state */
-        if(w == o->active_workspace) {
-          struct ashwc_workspace *owned_workspace = output_find_owned_workspace(o);
+        if (w == o->active_workspace) {
+          struct ashwc_workspace *owned_workspace =
+              output_find_owned_workspace(o);
           /* it should have had its own workspace */
           assert(owned_workspace != NULL);
           change_workspace(owned_workspace, false);
@@ -173,7 +177,7 @@ output_transfer_existing_workspaces(struct ashwc_output *output) {
         w->output = output;
         wl_list_remove(&w->link);
         wl_list_insert(&output->workspaces, &w->link);
-        if(output->active_workspace == NULL) {
+        if (output->active_workspace == NULL) {
           output->active_workspace = w;
         }
         found = true;
@@ -182,39 +186,41 @@ output_transfer_existing_workspaces(struct ashwc_output *output) {
   }
 
   return found;
-
 }
 
-struct wlr_box
-output_add_to_layout(struct ashwc_output *output, struct output_config *config) {
+struct wlr_box output_add_to_layout(struct ashwc_output *output,
+                                    struct output_config *config) {
   struct wlr_output_layout_output *layout;
-  if(config != NULL) {
+  if (config != NULL) {
     wlr_log(WLR_INFO, "setting position of output %s to %d, %d",
             output->wlr_output->name, config->x, config->y);
     layout = wlr_output_layout_add(server.output_layout, output->wlr_output,
                                    config->x, config->y);
   } else {
-    layout = wlr_output_layout_add_auto(server.output_layout, output->wlr_output);
+    layout =
+        wlr_output_layout_add_auto(server.output_layout, output->wlr_output);
   }
 
-  wlr_scene_output_layout_add_output(server.scene_layout, layout, output->scene_output);
+  wlr_scene_output_layout_add_output(server.scene_layout, layout,
+                                     output->scene_output);
 
   struct wlr_box output_box;
-  wlr_output_layout_get_box(server.output_layout, output->wlr_output, &output_box);
+  wlr_output_layout_get_box(server.output_layout, output->wlr_output,
+                            &output_box);
   output->usable_area = output_box;
 
   return output_box;
 }
 
-bool
-output_initialize(struct wlr_output *wlr_output, struct output_config *config) {
+bool output_initialize(struct wlr_output *wlr_output,
+                       struct output_config *config) {
   wlr_output_init_render(wlr_output, server.allocator, server.renderer);
 
   struct wlr_output_state state;
   wlr_output_state_init(&state);
   wlr_output_state_set_enabled(&state, true);
 
-  if(config != NULL) {
+  if (config != NULL) {
     wlr_output_state_set_scale(&state, config->scale);
     /* we try to find the closest supported mode for this output, that means:
      *  - same resolution
@@ -225,24 +231,27 @@ output_initialize(struct wlr_output *wlr_output, struct output_config *config) {
 
     struct wlr_output_mode *m;
     wl_list_for_each(m, &wlr_output->modes, link) {
-      if(m->width == config->width && m->height == config->height
-         && abs((int)m->refresh - (int)config->refresh_rate) < best_match_diff) {
+      if (m->width == config->width && m->height == config->height &&
+          abs((int)m->refresh - (int)config->refresh_rate) < best_match_diff) {
         best_match = m;
         best_match_diff = abs((int)m->refresh - (int)config->refresh_rate);
       }
     }
 
-    if(best_match != NULL) {
+    if (best_match != NULL) {
       wlr_log(WLR_INFO, "trying to set mode for output %s to %dx%d@%dmHz",
-              wlr_output->name, best_match->width, best_match->height, best_match->refresh);
+              wlr_output->name, best_match->width, best_match->height,
+              best_match->refresh);
       /* we set the mode and try to commit the state.
        * if it fails then we backup to the preffered. it should not fail! */
       wlr_output_state_set_mode(&state, best_match);
       bool success = wlr_output_commit_state(wlr_output, &state);
-      if(!success) {
+      if (!success) {
         success = output_apply_preffered_mode(wlr_output, &state);
-        if(!success) {
-          wlr_log(WLR_ERROR, "couldn't apply the preffered mode to the output %s", wlr_output->name);
+        if (!success) {
+          wlr_log(WLR_ERROR,
+                  "couldn't apply the preffered mode to the output %s",
+                  wlr_output->name);
           /* free the resource */
           wlr_output_state_finish(&state);
           return false;
@@ -250,19 +259,23 @@ output_initialize(struct wlr_output *wlr_output, struct output_config *config) {
       }
     } else {
       bool success = output_apply_preffered_mode(wlr_output, &state);
-      if(!success) {
-        wlr_log(WLR_ERROR, "couldn't apply the preffered mode to the output %s", wlr_output->name);
+      if (!success) {
+        wlr_log(WLR_ERROR, "couldn't apply the preffered mode to the output %s",
+                wlr_output->name);
         /* free the resource */
         wlr_output_state_finish(&state);
         return false;
       }
     }
   } else {
-    wlr_log(WLR_INFO, "output %s not specified in the config; using the preffered mode.", wlr_output->name);
+    wlr_log(WLR_INFO,
+            "output %s not specified in the config; using the preffered mode.",
+            wlr_output->name);
     /* if it is not specified in the config we take its preffered mode */
     bool success = output_apply_preffered_mode(wlr_output, &state);
-    if(!success) {
-      wlr_log(WLR_ERROR, "couldn't apply the preffered mode to the output %s", wlr_output->name);
+    if (!success) {
+      wlr_log(WLR_ERROR, "couldn't apply the preffered mode to the output %s",
+              wlr_output->name);
       /* free the resource */
       wlr_output_state_finish(&state);
       return false;
@@ -275,32 +288,31 @@ output_initialize(struct wlr_output *wlr_output, struct output_config *config) {
   return true;
 }
 
-bool
-output_apply_preffered_mode(struct wlr_output *wlr_output, struct wlr_output_state *state) {
+bool output_apply_preffered_mode(struct wlr_output *wlr_output,
+                                 struct wlr_output_state *state) {
   struct wlr_output_mode *mode = wlr_output_preferred_mode(wlr_output);
   wlr_output_state_set_mode(state, mode);
 
   return wlr_output_commit_state(wlr_output, state);
 }
 
-double
-output_frame_duration_ms(struct ashwc_output *output) {
+double output_frame_duration_ms(struct ashwc_output *output) {
   return 1000000.0 / output->wlr_output->refresh;
 }
 
-struct ashwc_output *
-output_get_relative(struct ashwc_output *output, enum ashwc_direction direction) {
+struct ashwc_output *output_get_relative(struct ashwc_output *output,
+                                         enum ashwc_direction direction) {
   struct wlr_box original_output_box;
-  wlr_output_layout_get_box(server.output_layout,
-                            output->wlr_output, &original_output_box);
+  wlr_output_layout_get_box(server.output_layout, output->wlr_output,
+                            &original_output_box);
 
   original_output_box.width *= output->wlr_output->scale;
   original_output_box.height *= output->wlr_output->scale;
 
   uint32_t original_output_midpoint_x =
-    original_output_box.x + original_output_box.width / 2;
+      original_output_box.x + original_output_box.width / 2;
   uint32_t original_output_midpoint_y =
-    original_output_box.y + original_output_box.height / 2;
+      original_output_box.y + original_output_box.height / 2;
 
   struct ashwc_output *o;
   wl_list_for_each(o, &server.outputs, link) {
@@ -309,25 +321,27 @@ output_get_relative(struct ashwc_output *output, enum ashwc_direction direction)
     output_box.width *= o->wlr_output->scale;
     output_box.height *= o->wlr_output->scale;
 
-    if(direction == ASHWC_LEFT &&
-      original_output_box.x == output_box.x + output_box.width
-      && original_output_midpoint_y > output_box.y
-      && original_output_midpoint_y < output_box.y + output_box.height) {
+    if (direction == ASHWC_LEFT &&
+        original_output_box.x == output_box.x + output_box.width &&
+        original_output_midpoint_y > output_box.y &&
+        original_output_midpoint_y < output_box.y + output_box.height) {
       return o;
-    } else if(direction == ASHWC_RIGHT
-      && original_output_box.x + original_output_box.width == output_box.x
-      && original_output_midpoint_y > output_box.y
-      && original_output_midpoint_y < output_box.y + output_box.height) {
+    } else if (direction == ASHWC_RIGHT &&
+               original_output_box.x + original_output_box.width ==
+                   output_box.x &&
+               original_output_midpoint_y > output_box.y &&
+               original_output_midpoint_y < output_box.y + output_box.height) {
       return o;
-    } else if(direction == ASHWC_UP
-      && original_output_box.y == output_box.y + output_box.height
-      && original_output_midpoint_x > output_box.x
-      && original_output_midpoint_x < output_box.x + output_box.width) {
+    } else if (direction == ASHWC_UP &&
+               original_output_box.y == output_box.y + output_box.height &&
+               original_output_midpoint_x > output_box.x &&
+               original_output_midpoint_x < output_box.x + output_box.width) {
       return o;
-    } else if(direction == ASHWC_DOWN
-      && original_output_box.y + original_output_box.height == output_box.y
-      && original_output_midpoint_x > output_box.x
-      && original_output_midpoint_x < output_box.x + output_box.width) {
+    } else if (direction == ASHWC_DOWN &&
+               original_output_box.y + original_output_box.height ==
+                   output_box.y &&
+               original_output_midpoint_x > output_box.x &&
+               original_output_midpoint_x < output_box.x + output_box.width) {
       return o;
     }
   }
@@ -335,13 +349,12 @@ output_get_relative(struct ashwc_output *output, enum ashwc_direction direction)
   return NULL;
 }
 
-void
-cursor_jump_output(struct ashwc_output *output) {
+void cursor_jump_output(struct ashwc_output *output) {
   struct wlr_box output_box;
-  wlr_output_layout_get_box(server.output_layout, output->wlr_output, &output_box);
+  wlr_output_layout_get_box(server.output_layout, output->wlr_output,
+                            &output_box);
 
-  wlr_cursor_warp(server.cursor, NULL,
-                  output_box.x + output_box.width / 2.0,
+  wlr_cursor_warp(server.cursor, NULL, output_box.x + output_box.width / 2.0,
                   output_box.y + output_box.height / 2.0);
 
   struct timespec now;
@@ -350,13 +363,13 @@ cursor_jump_output(struct ashwc_output *output) {
   pointer_handle_focus(now.tv_sec * 1000 + now.tv_nsec / 1000, false);
 }
 
-void
-focus_output(struct ashwc_output *output, enum ashwc_direction side) {
+void focus_output(struct ashwc_output *output, enum ashwc_direction side) {
   assert(output != NULL);
 
-  if(server.lock != NULL) {
-    if(!wl_list_empty(&server.lock->surfaces)) {
-      struct ashwc_lock_surface *l = wl_container_of(server.lock->surfaces.next, l, link);
+  if (server.lock != NULL) {
+    if (!wl_list_empty(&server.lock->surfaces)) {
+      struct ashwc_lock_surface *l =
+          wl_container_of(server.lock->surfaces.next, l, link);
       focus_lock_surface(l);
     }
     return;
@@ -365,33 +378,34 @@ focus_output(struct ashwc_output *output, enum ashwc_direction side) {
   struct ashwc_toplevel *focus_next = NULL;
   struct ashwc_workspace *workspace = output->active_workspace;
 
-  if(workspace->fullscreen_toplevel != NULL) {
+  if (workspace->fullscreen_toplevel != NULL) {
     focus_next = workspace->fullscreen_toplevel;
-  } else if(server.focused_toplevel == NULL || !server.focused_toplevel->floating) {
+  } else if (server.focused_toplevel == NULL ||
+             !server.focused_toplevel->floating) {
     bool master = server.focused_toplevel != NULL
-      ? toplevel_is_master(server.focused_toplevel)
-      : true;
+                      ? toplevel_is_master(server.focused_toplevel)
+                      : true;
     focus_next = layout_find_closest_tiled_toplevel(output->active_workspace,
-                                                       master, side);
+                                                    master, side);
     /* if there are no tiled toplevels we try floating */
-    if(focus_next == NULL) {
-      focus_next = workspace_find_closest_floating_toplevel(output->active_workspace,
-                                                            side);
+    if (focus_next == NULL) {
+      focus_next = workspace_find_closest_floating_toplevel(
+          output->active_workspace, side);
     }
   } else {
-    focus_next = workspace_find_closest_floating_toplevel(output->active_workspace,
-                                                          side);
+    focus_next = workspace_find_closest_floating_toplevel(
+        output->active_workspace, side);
     /* if there are no floating toplevels we try tiled */
-    if(focus_next == NULL) {
+    if (focus_next == NULL) {
       focus_next = layout_find_closest_tiled_toplevel(output->active_workspace,
-                                                         true, side);
+                                                      true, side);
     }
   }
 
   server.active_workspace = workspace;
   ipc_broadcast_message(IPC_ACTIVE_WORKSPACE);
 
-  if(focus_next == NULL) {
+  if (focus_next == NULL) {
     unfocus_focused_toplevel();
     cursor_jump_output(output);
   } else {
@@ -400,8 +414,7 @@ focus_output(struct ashwc_output *output, enum ashwc_direction side) {
   }
 }
 
-void
-output_handle_frame(struct wl_listener *listener, void *data) {
+void output_handle_frame(struct wl_listener *listener, void *data) {
   /* this function is called every time an output is ready to display a frame,
    * generally at the output's refresh rate */
   struct ashwc_output *output = wl_container_of(listener, output, frame);
@@ -409,8 +422,8 @@ output_handle_frame(struct wl_listener *listener, void *data) {
 
   workspace_draw_frame(workspace);
 
-  struct wlr_scene_output *scene_output = wlr_scene_get_scene_output(server.scene,
-                                                                     output->wlr_output);
+  struct wlr_scene_output *scene_output =
+      wlr_scene_get_scene_output(server.scene, output->wlr_output);
 
   wlr_scene_output_commit(scene_output, NULL);
 
@@ -420,35 +433,35 @@ output_handle_frame(struct wl_listener *listener, void *data) {
   wlr_scene_output_send_frame_done(scene_output, &now);
 }
 
-void
-output_handle_request_state(struct wl_listener *listener, void *data) {
+void output_handle_request_state(struct wl_listener *listener, void *data) {
   /* this function is called when the backend requests a new state for
    * the output. for example, wayland and X11 backends request a new mode
    * when the output window is resized */
-  struct ashwc_output *output = wl_container_of(listener, output, request_state);
+  struct ashwc_output *output =
+      wl_container_of(listener, output, request_state);
   const struct wlr_output_event_request_state *event = data;
 
   wlr_output_commit_state(output->wlr_output, event->state);
 }
 
-void
-output_handle_destroy(struct wl_listener *listener, void *data) {
+void output_handle_destroy(struct wl_listener *listener, void *data) {
   struct ashwc_output *output = wl_container_of(listener, output, destroy);
 
   /* we want to transfer all the workspaces to a new output;
-   * if this was the only output then idk what to do honestly, maybe have a temporary
-   * stash thats going to hold them until some output is attached again? TODO */
-  if(server.running) {
+   * if this was the only output then idk what to do honestly, maybe have a
+   * temporary stash thats going to hold them until some output is attached
+   * again? TODO */
+  if (server.running) {
     struct wl_list *next = output->link.next;
-    if(next == &server.outputs) {
+    if (next == &server.outputs) {
       next = output->link.prev;
     }
 
-    if(next != &server.outputs) {
+    if (next != &server.outputs) {
       struct ashwc_output *new = wl_container_of(next, new, link);
-      bool valid_focus = server.focused_toplevel != NULL
-        && server.focused_toplevel->workspace->output != output;
-      if(!valid_focus) {
+      bool valid_focus = server.focused_toplevel != NULL &&
+                         server.focused_toplevel->workspace->output != output;
+      if (!valid_focus) {
         focus_output(new, ASHWC_LEFT);
       }
 
@@ -462,7 +475,7 @@ output_handle_destroy(struct wl_listener *listener, void *data) {
     }
   }
 
-  if(output->session_lock_rect != NULL) {
+  if (output->session_lock_rect != NULL) {
     wlr_scene_node_destroy(&output->session_lock_rect->node);
   }
 
@@ -474,7 +487,4 @@ output_handle_destroy(struct wl_listener *listener, void *data) {
   free(output);
 }
 
-void
-output_destroy(void) {
-    wl_list_remove(&server.new_output.link);
-}
+void output_destroy(void) { wl_list_remove(&server.new_output.link); }

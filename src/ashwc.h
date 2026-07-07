@@ -7,13 +7,13 @@
 #include "session_lock.h"
 
 #include <wayland-server-protocol.h>
-#include <wlr/util/box.h>
-#include <wlr/types/wlr_server_decoration.h>
-#include <wlr/types/wlr_gamma_control_v1.h>
 #include <wlr/types/wlr_cursor_shape_v1.h>
+#include <wlr/types/wlr_gamma_control_v1.h>
+#include <wlr/types/wlr_keyboard_shortcuts_inhibit_v1.h>
 #include <wlr/types/wlr_pointer_constraints_v1.h>
 #include <wlr/types/wlr_relative_pointer_v1.h>
-#include <wlr/types/wlr_keyboard_shortcuts_inhibit_v1.h>
+#include <wlr/types/wlr_server_decoration.h>
+#include <wlr/util/box.h>
 
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -28,76 +28,77 @@ enum ashwc_direction {
 };
 
 enum ashwc_layout {
-    ASHWC_LAYOUT_MASTER,
-    ASHWC_LAYOUT_GRID,
-    ASHWC_LAYOUT_MONOCLE,
-    ASHWC_LAYOUT_COUNT,
+  ASHWC_LAYOUT_MASTER,
+  ASHWC_LAYOUT_GRID,
+  ASHWC_LAYOUT_MONOCLE,
+  ASHWC_LAYOUT_COUNT,
 };
 
 struct ashwc_server {
-	struct wl_display *wl_display;
-	struct wl_event_loop *wl_event_loop;
+  struct wl_display *wl_display;
+  struct wl_event_loop *wl_event_loop;
   struct wlr_session *session;
-	struct wlr_backend *backend;
-	struct wlr_renderer *renderer;
-	struct wlr_allocator *allocator;
-	struct wlr_scene *scene;
-	struct wlr_scene_output_layout *scene_layout;
+  struct wlr_backend *backend;
+  struct wlr_renderer *renderer;
+  struct wlr_allocator *allocator;
+  struct wlr_scene *scene;
+  struct wlr_scene_output_layout *scene_layout;
 
-	struct wlr_scene_tree *floating_tree;
-	struct wlr_scene_tree *tiled_tree;
-	struct wlr_scene_tree *background_tree;
-	struct wlr_scene_tree *bottom_tree;
-	struct wlr_scene_tree *top_tree;
-	struct wlr_scene_tree *fullscreen_tree;
-	struct wlr_scene_tree *overlay_tree;
-	struct wlr_scene_tree *session_lock_tree;
+  struct wlr_scene_tree *floating_tree;
+  struct wlr_scene_tree *tiled_tree;
+  struct wlr_scene_tree *background_tree;
+  struct wlr_scene_tree *bottom_tree;
+  struct wlr_scene_tree *top_tree;
+  struct wlr_scene_tree *fullscreen_tree;
+  struct wlr_scene_tree *overlay_tree;
+  struct wlr_scene_tree *session_lock_tree;
 
-	struct wlr_xdg_shell *xdg_shell;
-	struct wl_listener new_xdg_toplevel;
-	struct wl_listener new_xdg_popup;
+  struct wlr_xdg_shell *xdg_shell;
+  struct wl_listener new_xdg_toplevel;
+  struct wl_listener new_xdg_popup;
 
   struct wlr_layer_shell_v1 *layer_shell;
-	struct wl_listener new_layer_surface;
+  struct wl_listener new_layer_surface;
 
   struct wl_list pointers;
 
-	struct wlr_cursor *cursor;
-	struct wlr_xcursor_manager *cursor_mgr;
-	struct wl_listener cursor_motion;
-	struct wl_listener cursor_motion_absolute;
-	struct wl_listener cursor_button;
-	struct wl_listener cursor_axis;
-	struct wl_listener cursor_frame;
+  struct wlr_cursor *cursor;
+  struct wlr_xcursor_manager *cursor_mgr;
+  struct wl_listener cursor_motion;
+  struct wl_listener cursor_motion_absolute;
+  struct wl_listener cursor_button;
+  struct wl_listener cursor_axis;
+  struct wl_listener cursor_frame;
 
   struct wlr_cursor_shape_manager_v1 *cursor_shape_manager;
   struct wl_listener request_cursor_shape;
   struct wl_listener cursor_shape_manager_destroy;
 
-	struct wlr_seat *seat;
-	struct wl_listener new_input;
-	struct wl_listener request_cursor;
-	struct wl_listener request_set_selection;
+  struct wlr_seat *seat;
+  struct wl_listener new_input;
+  struct wl_listener request_cursor;
+  struct wl_listener request_set_selection;
 
   bool drag_active;
   struct wlr_scene_tree *drag_icon_tree;
-	struct wl_listener request_drag;
-	struct wl_listener request_start_drag;
+  struct wl_listener request_drag;
+  struct wl_listener request_start_drag;
   struct wl_listener request_destroy_drag;
 
-	struct wl_list keyboards;
+  struct wl_list keyboards;
   struct ashwc_keyboard *last_used_keyboard;
 
-	enum ashwc_cursor_mode cursor_mode;
+  enum ashwc_cursor_mode cursor_mode;
   /* this keeps state when the compositor is in the state of moving or
    * resizing toplevels */
-	struct ashwc_toplevel *grabbed_toplevel;
-	double grab_x, grab_y;
-	struct wlr_box grabbed_toplevel_initial_box;
-	uint32_t resize_edges;
-	bool client_driven_move_resize;
+  struct ashwc_toplevel *grabbed_toplevel;
+  double grab_x, grab_y;
+  struct wlr_box grabbed_toplevel_initial_box;
+  uint32_t resize_edges;
+  bool client_driven_move_resize;
 
-  /* keeps state about the client cursor when the server initialized move/resize */
+  /* keeps state about the client cursor when the server initialized move/resize
+   */
   struct {
     struct wlr_surface *surface;
     uint32_t hotspot_x;
@@ -114,9 +115,9 @@ struct ashwc_server {
   /* last focused toplevel before layer surface was given focus */
   struct ashwc_toplevel *prev_focused;
 
-	struct wlr_output_layout *output_layout;
-	struct wl_list outputs;
-	struct wl_listener new_output;
+  struct wlr_output_layout *output_layout;
+  struct wl_list outputs;
+  struct wl_listener new_output;
 
   struct wlr_xdg_decoration_manager_v1 *xdg_decoration_manager;
   struct wl_listener request_xdg_decoration;
@@ -154,4 +155,3 @@ struct ashwc_server {
 
   bool running;
 };
-

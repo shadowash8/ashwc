@@ -2,11 +2,11 @@
 
 #include "workspace.h"
 
-#include "layout.h"
 #include "ashwc.h"
 #include "ipc.h"
 #include "keybinds.h"
 #include "layer_surface.h"
+#include "layout.h"
 #include "something.h"
 
 #include <assert.h>
@@ -14,8 +14,8 @@
 
 extern struct ashwc_server server;
 
-void
-workspace_create_for_output(struct ashwc_output *output, struct workspace_config *config) {
+void workspace_create_for_output(struct ashwc_output *output,
+                                 struct workspace_config *config) {
   struct ashwc_workspace *workspace = calloc(1, sizeof(*workspace));
 
   wl_list_init(&workspace->floating_toplevels);
@@ -29,7 +29,7 @@ workspace_create_for_output(struct ashwc_output *output, struct workspace_config
   wl_list_insert(&output->workspaces, &workspace->link);
 
   /* if first then set it active */
-  if(output->active_workspace == NULL) {
+  if (output->active_workspace == NULL) {
     output->active_workspace = workspace;
   }
 
@@ -38,33 +38,36 @@ workspace_create_for_output(struct ashwc_output *output, struct workspace_config
     /* we didnt have information about what workspace this is going to be,
      * so we only kept an index. now we replace it with
      * the actual workspace pointer */
-    if(k->action == keybind_change_workspace && (uint64_t)k->args == workspace->index) {
+    if (k->action == keybind_change_workspace &&
+        (uint64_t)k->args == workspace->index) {
       k->args = workspace;
       k->initialized = true;
-    } else if(k->action == keybind_move_focused_toplevel_to_workspace
-              && (uint64_t)k->args == workspace->index) {
+    } else if (k->action == keybind_move_focused_toplevel_to_workspace &&
+               (uint64_t)k->args == workspace->index) {
       k->args = workspace;
       k->initialized = true;
     }
   }
 }
 
-void
-change_workspace(struct ashwc_workspace *workspace, bool keep_focus) {
+void change_workspace(struct ashwc_workspace *workspace, bool keep_focus) {
   /* if it is the same as global active workspace, do nothing */
-  if(server.active_workspace == workspace) return;
+  if (server.active_workspace == workspace)
+    return;
 
   /* if it is an already active on its output, just switch to it */
-  if(workspace == workspace->output->active_workspace) {
-    if(keep_focus) {
+  if (workspace == workspace->output->active_workspace) {
+    if (keep_focus) {
       /* do nothing */
-    } else if(workspace->fullscreen_toplevel != NULL) {
+    } else if (workspace->fullscreen_toplevel != NULL) {
       focus_toplevel(workspace->fullscreen_toplevel);
-    } else if(!wl_list_empty(&workspace->masters)) {
-      struct ashwc_toplevel *t = wl_container_of(workspace->masters.next, t, link);
+    } else if (!wl_list_empty(&workspace->masters)) {
+      struct ashwc_toplevel *t =
+          wl_container_of(workspace->masters.next, t, link);
       focus_toplevel(t);
-    } else if(!wl_list_empty(&workspace->floating_toplevels)) {
-      struct ashwc_toplevel *t = wl_container_of(workspace->floating_toplevels.next, t, link);
+    } else if (!wl_list_empty(&workspace->floating_toplevels)) {
+      struct ashwc_toplevel *t =
+          wl_container_of(workspace->floating_toplevels.next, t, link);
       focus_toplevel(t);
     } else {
       unfocus_focused_toplevel();
@@ -78,7 +81,8 @@ change_workspace(struct ashwc_workspace *workspace, bool keep_focus) {
 
   /* else remove all the toplevels on that workspace */
   struct ashwc_toplevel *t;
-  wl_list_for_each(t, &workspace->output->active_workspace->floating_toplevels, link) {
+  wl_list_for_each(t, &workspace->output->active_workspace->floating_toplevels,
+                   link) {
     wlr_scene_node_set_enabled(&t->scene_tree->node, false);
   }
   wl_list_for_each(t, &workspace->output->active_workspace->masters, link) {
@@ -89,8 +93,9 @@ change_workspace(struct ashwc_workspace *workspace, bool keep_focus) {
   }
 
   /* and show this workspace's toplevels */
-  if(workspace->fullscreen_toplevel != NULL) {
-    wlr_scene_node_set_enabled(&workspace->fullscreen_toplevel->scene_tree->node, true);
+  if (workspace->fullscreen_toplevel != NULL) {
+    wlr_scene_node_set_enabled(
+        &workspace->fullscreen_toplevel->scene_tree->node, true);
     layers_under_fullscreen_set_enabled(workspace->output, false);
   } else {
     wl_list_for_each(t, &workspace->floating_toplevels, link) {
@@ -103,12 +108,12 @@ change_workspace(struct ashwc_workspace *workspace, bool keep_focus) {
       wlr_scene_node_set_enabled(&t->scene_tree->node, true);
     }
 
-    if(workspace->output->active_workspace->fullscreen_toplevel != NULL) {
+    if (workspace->output->active_workspace->fullscreen_toplevel != NULL) {
       layers_under_fullscreen_set_enabled(workspace->output, true);
     }
   }
 
-  if(server.active_workspace->output != workspace->output) {
+  if (server.active_workspace->output != workspace->output) {
     cursor_jump_output(workspace->output);
   }
 
@@ -117,48 +122,51 @@ change_workspace(struct ashwc_workspace *workspace, bool keep_focus) {
   ipc_broadcast_message(IPC_ACTIVE_WORKSPACE);
 
   /* same as above */
-  if(keep_focus) {
+  if (keep_focus) {
     /* do nothing */
-  } else if(workspace->fullscreen_toplevel != NULL) {
+  } else if (workspace->fullscreen_toplevel != NULL) {
     focus_toplevel(workspace->fullscreen_toplevel);
-  } else if(keep_focus) {
+  } else if (keep_focus) {
     return;
-  } else if(!wl_list_empty(&workspace->masters)) {
-    struct ashwc_toplevel *t = wl_container_of(workspace->masters.next, t, link);
+  } else if (!wl_list_empty(&workspace->masters)) {
+    struct ashwc_toplevel *t =
+        wl_container_of(workspace->masters.next, t, link);
     focus_toplevel(t);
-  } else if(!wl_list_empty(&workspace->floating_toplevels)) {
-    struct ashwc_toplevel *t = wl_container_of(workspace->floating_toplevels.next, t, link);
+  } else if (!wl_list_empty(&workspace->floating_toplevels)) {
+    struct ashwc_toplevel *t =
+        wl_container_of(workspace->floating_toplevels.next, t, link);
     focus_toplevel(t);
   } else {
     unfocus_focused_toplevel();
   }
 }
 
-void
-toplevel_move_to_workspace(struct ashwc_toplevel *toplevel,
-                           struct ashwc_workspace *workspace) {
+void toplevel_move_to_workspace(struct ashwc_toplevel *toplevel,
+                                struct ashwc_workspace *workspace) {
   assert(toplevel != NULL && workspace != NULL);
-  if(toplevel == server.grabbed_toplevel || toplevel->workspace == workspace
-     || workspace->fullscreen_toplevel != NULL) return;
+  if (toplevel == server.grabbed_toplevel || toplevel->workspace == workspace ||
+      workspace->fullscreen_toplevel != NULL)
+    return;
 
   struct ashwc_workspace *old_workspace = toplevel->workspace;
 
-  /* handle server state; note: even tho fullscreen toplevel is handled differently
-   * we will still update its underlying type */
-  if(toplevel->floating) {
+  /* handle server state; note: even tho fullscreen toplevel is handled
+   * differently we will still update its underlying type */
+  if (toplevel->floating) {
     toplevel->workspace = workspace;
     wl_list_remove(&toplevel->link);
     wl_list_insert(&workspace->floating_toplevels, &toplevel->link);
-  } else if(toplevel_is_master(toplevel)){
+  } else if (toplevel_is_master(toplevel)) {
     wl_list_remove(&toplevel->link);
-    if(!wl_list_empty(&old_workspace->slaves)) {
-      struct ashwc_toplevel *s = wl_container_of(old_workspace->slaves.next, s, link);
+    if (!wl_list_empty(&old_workspace->slaves)) {
+      struct ashwc_toplevel *s =
+          wl_container_of(old_workspace->slaves.next, s, link);
       wl_list_remove(&s->link);
       wl_list_insert(old_workspace->masters.prev, &s->link);
     }
 
     toplevel->workspace = workspace;
-    if(wl_list_length(&workspace->masters) < server.config->master_count) {
+    if (wl_list_length(&workspace->masters) < server.config->master_count) {
       wl_list_insert(workspace->masters.prev, &toplevel->link);
     } else {
       wl_list_insert(workspace->slaves.prev, &toplevel->link);
@@ -167,7 +175,7 @@ toplevel_move_to_workspace(struct ashwc_toplevel *toplevel,
     wl_list_remove(&toplevel->link);
 
     toplevel->workspace = workspace;
-    if(wl_list_length(&workspace->masters) < server.config->master_count) {
+    if (wl_list_length(&workspace->masters) < server.config->master_count) {
       wl_list_insert(workspace->masters.prev, &toplevel->link);
     } else {
       wl_list_insert(workspace->slaves.prev, &toplevel->link);
@@ -175,63 +183,66 @@ toplevel_move_to_workspace(struct ashwc_toplevel *toplevel,
   }
 
   /* handle presentation */
-  if(toplevel->fullscreen) {
+  if (toplevel->fullscreen) {
     old_workspace->fullscreen_toplevel = NULL;
     workspace->fullscreen_toplevel = toplevel;
 
     struct wlr_box output_box;
-    wlr_output_layout_get_box(server.output_layout, workspace->output->wlr_output, &output_box);
+    wlr_output_layout_get_box(server.output_layout,
+                              workspace->output->wlr_output, &output_box);
     toplevel_set_pending_state(toplevel, output_box.x, output_box.y,
                                output_box.width, output_box.height);
 
     layers_under_fullscreen_set_enabled(workspace->output, false);
-    if(old_workspace->output != workspace->output) {
+    if (old_workspace->output != workspace->output) {
       layers_under_fullscreen_set_enabled(old_workspace->output, true);
     }
 
-    if(toplevel->floating) {
+    if (toplevel->floating) {
       /* calculate where the toplevel should be placed after exiting fullscreen,
        * see note for floating bellow */
       uint32_t old_output_relative_x =
-        toplevel->prev_geometry.x - old_workspace->output->usable_area.x;
-      double relative_x =
-        (double)old_output_relative_x / old_workspace->output->usable_area.width;
+          toplevel->prev_geometry.x - old_workspace->output->usable_area.x;
+      double relative_x = (double)old_output_relative_x /
+                          old_workspace->output->usable_area.width;
 
       uint32_t old_output_relative_y =
-        toplevel->prev_geometry.y - old_workspace->output->usable_area.y;
-      double relative_y =
-        (double)old_output_relative_y / old_workspace->output->usable_area.height;
+          toplevel->prev_geometry.y - old_workspace->output->usable_area.y;
+      double relative_y = (double)old_output_relative_y /
+                          old_workspace->output->usable_area.height;
 
-      uint32_t new_output_x = workspace->output->usable_area.x
-        + relative_x * workspace->output->usable_area.width;
-      uint32_t new_output_y = workspace->output->usable_area.y
-        + relative_y * workspace->output->usable_area.height;
+      uint32_t new_output_x = workspace->output->usable_area.x +
+                              relative_x * workspace->output->usable_area.width;
+      uint32_t new_output_y =
+          workspace->output->usable_area.y +
+          relative_y * workspace->output->usable_area.height;
 
       toplevel->prev_geometry.x = new_output_x;
       toplevel->prev_geometry.y = new_output_y;
     } else {
       layout_set_pending_state(old_workspace);
     }
-  } else if(toplevel->floating && old_workspace->output != workspace->output) {
+  } else if (toplevel->floating && old_workspace->output != workspace->output) {
     /* we want to place the toplevel to the same relative coordinates,
      * as the new output may have a different resolution */
     uint32_t old_output_relative_x =
-      toplevel->scene_tree->node.x - old_workspace->output->usable_area.x;
-    double relative_x =
-      (double)old_output_relative_x / old_workspace->output->usable_area.width;
+        toplevel->scene_tree->node.x - old_workspace->output->usable_area.x;
+    double relative_x = (double)old_output_relative_x /
+                        old_workspace->output->usable_area.width;
 
     uint32_t old_output_relative_y =
-      toplevel->scene_tree->node.y - old_workspace->output->usable_area.y;
-    double relative_y =
-      (double)old_output_relative_y / old_workspace->output->usable_area.height;
+        toplevel->scene_tree->node.y - old_workspace->output->usable_area.y;
+    double relative_y = (double)old_output_relative_y /
+                        old_workspace->output->usable_area.height;
 
-    uint32_t new_output_x = workspace->output->usable_area.x
-      + relative_x * workspace->output->usable_area.width;
-    uint32_t new_output_y = workspace->output->usable_area.y
-      + relative_y * workspace->output->usable_area.height;
+    uint32_t new_output_x = workspace->output->usable_area.x +
+                            relative_x * workspace->output->usable_area.width;
+    uint32_t new_output_y = workspace->output->usable_area.y +
+                            relative_y * workspace->output->usable_area.height;
 
     toplevel_set_pending_state(toplevel, new_output_x, new_output_y,
-                               toplevel->current.width, toplevel->current.height);
+                               toplevel->current.width,
+                               toplevel->current.height);
   } else {
     layout_set_pending_state(old_workspace);
     layout_set_pending_state(workspace);
@@ -245,7 +256,8 @@ struct ashwc_toplevel *
 workspace_find_closest_floating_toplevel(struct ashwc_workspace *workspace,
                                          enum ashwc_direction side) {
   struct wl_list *l = workspace->floating_toplevels.next;
-  if(l == &workspace->floating_toplevels) return NULL;
+  if (l == &workspace->floating_toplevels)
+    return NULL;
 
   struct ashwc_toplevel *t = wl_container_of(l, t, link);
 
@@ -255,23 +267,26 @@ workspace_find_closest_floating_toplevel(struct ashwc_workspace *workspace,
   struct ashwc_toplevel *max_y = t;
 
   wl_list_for_each(t, &workspace->floating_toplevels, link) {
-    if(X(t) < X(min_x)) {
+    if (X(t) < X(min_x)) {
       min_x = t;
-    } else if(X(t) > X(max_x)) {
+    } else if (X(t) > X(max_x)) {
       max_x = t;
     }
-    if(Y(t) < Y(min_y)) {
+    if (Y(t) < Y(min_y)) {
       min_y = t;
-    } else if(Y(t) > Y(max_y)) {
+    } else if (Y(t) > Y(max_y)) {
       max_y = t;
     }
   }
 
-  switch(side) {
-    case ASHWC_UP: return min_y;
-    case ASHWC_DOWN: return max_y;
-    case ASHWC_LEFT: return min_x;
-    case ASHWC_RIGHT: return max_x;
+  switch (side) {
+  case ASHWC_UP:
+    return min_y;
+  case ASHWC_DOWN:
+    return max_y;
+  case ASHWC_LEFT:
+    return min_x;
+  case ASHWC_RIGHT:
+    return max_x;
   }
 }
-

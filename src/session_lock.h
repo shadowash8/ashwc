@@ -28,13 +28,11 @@ struct ashwc_lock_surface {
   struct wl_listener destroy;
 };
 
-void
-session_lock_manager_handle_new(struct wl_listener *listener, void *data);
+void session_lock_manager_handle_new(struct wl_listener *listener, void *data);
 
-void
-session_lock_manager_handle_destroy(struct wl_listener *listener, void *data);
+void session_lock_manager_handle_destroy(struct wl_listener *listener,
+                                         void *data);
 
-void
-focus_lock_surface(struct ashwc_lock_surface *lock_surface);
+void focus_lock_surface(struct ashwc_lock_surface *lock_surface);
 
 void session_lock_destroy(void);

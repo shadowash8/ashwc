@@ -23,10 +23,8 @@ struct ashwc_something {
   };
 };
 
-struct ashwc_something *
-root_parent_of_surface(struct wlr_surface *wlr_surface);
+struct ashwc_something *root_parent_of_surface(struct wlr_surface *wlr_surface);
 
-struct ashwc_something *
-something_at(double lx, double ly,
-             struct wlr_surface **surface,
-             double *sx, double *sy);
+struct ashwc_something *something_at(double lx, double ly,
+                                     struct wlr_surface **surface, double *sx,
+                                     double *sy);

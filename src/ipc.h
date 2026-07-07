@@ -6,8 +6,6 @@ enum ipc_event {
   IPC_EVENT_COUNT,
 };
 
-void
-ipc_broadcast_message(enum ipc_event event);
+void ipc_broadcast_message(enum ipc_event event);
 
-void *
-ipc_run(void *args);
+void *ipc_run(void *args);

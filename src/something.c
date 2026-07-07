@@ -6,9 +6,9 @@
 #include "layer_surface.h"
 #include "session_lock.h"
 
-#include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_scene.h>
+#include <wlr/types/wlr_xdg_shell.h>
 
 extern struct ashwc_server server;
 
@@ -17,20 +17,21 @@ root_parent_of_surface(struct wlr_surface *wlr_surface) {
   struct wlr_surface *root_surface = wlr_surface_get_root_surface(wlr_surface);
 
   struct wlr_scene_tree *tree;
-  struct wlr_xdg_surface *xdg_surface = wlr_xdg_surface_try_from_wlr_surface(root_surface);
+  struct wlr_xdg_surface *xdg_surface =
+      wlr_xdg_surface_try_from_wlr_surface(root_surface);
 
-  if(xdg_surface != NULL) {
+  if (xdg_surface != NULL) {
     tree = xdg_surface->data;
   } else {
     struct wlr_layer_surface_v1 *wlr_layer_surface =
-      wlr_layer_surface_v1_try_from_wlr_surface(root_surface);
-    if(wlr_layer_surface != NULL) {
+        wlr_layer_surface_v1_try_from_wlr_surface(root_surface);
+    if (wlr_layer_surface != NULL) {
       struct ashwc_layer_surface *layer_surface = wlr_layer_surface->data;
       tree = layer_surface->scene->tree;
     } else {
       struct wlr_session_lock_surface_v1 *wlr_lock_surface =
-        wlr_session_lock_surface_v1_try_from_wlr_surface(root_surface);
-      if(wlr_lock_surface != NULL) {
+          wlr_session_lock_surface_v1_try_from_wlr_surface(root_surface);
+      if (wlr_lock_surface != NULL) {
         struct ashwc_lock_surface *lock_surface = wlr_lock_surface->data;
         tree = lock_surface->scene_tree;
       } else {
@@ -40,7 +41,7 @@ root_parent_of_surface(struct wlr_surface *wlr_surface) {
   }
 
   struct ashwc_something *something = tree->node.data;
-  while(something == NULL || something->type == ASHWC_POPUP) {
+  while (something == NULL || something->type == ASHWC_POPUP) {
     tree = tree->node.parent;
     something = tree->node.data;
   }
@@ -48,20 +49,20 @@ root_parent_of_surface(struct wlr_surface *wlr_surface) {
   return something;
 }
 
-struct ashwc_something *
-something_at(double lx, double ly, struct wlr_surface **surface,
-             double *sx, double *sy) {
+struct ashwc_something *something_at(double lx, double ly,
+                                     struct wlr_surface **surface, double *sx,
+                                     double *sy) {
   /* this returns the topmost node in the scene at the given layout coords */
-  struct wlr_scene_node *node = wlr_scene_node_at(&server.scene->tree.node,
-                                                  lx, ly, sx, sy);
-  if(node == NULL || node->type != WLR_SCENE_NODE_BUFFER) {
+  struct wlr_scene_node *node =
+      wlr_scene_node_at(&server.scene->tree.node, lx, ly, sx, sy);
+  if (node == NULL || node->type != WLR_SCENE_NODE_BUFFER) {
     return NULL;
   }
 
   struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
   struct wlr_scene_surface *scene_surface =
-    wlr_scene_surface_try_from_buffer(scene_buffer);
-  if(scene_surface == NULL) {
+      wlr_scene_surface_try_from_buffer(scene_buffer);
+  if (scene_surface == NULL) {
     return NULL;
   }
 
@@ -69,11 +70,10 @@ something_at(double lx, double ly, struct wlr_surface **surface,
 
   struct wlr_scene_tree *tree = node->parent;
   struct ashwc_something *something = tree->node.data;
-  while(something == NULL || something->type == ASHWC_POPUP) {
+  while (something == NULL || something->type == ASHWC_POPUP) {
     tree = tree->node.parent;
     something = tree->node.data;
   }
 
   return something;
 }
-

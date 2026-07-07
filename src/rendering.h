@@ -1,8 +1,8 @@
 #pragma once
 
 #include <stdint.h>
-#include <wlr/util/box.h>
 #include <wlr/types/wlr_scene.h>
+#include <wlr/util/box.h>
 
 enum ashwc_border_state {
   ASHWC_BORDER_INVISIBLE,
@@ -19,40 +19,28 @@ struct ashwc_animation {
   struct wlr_box current;
 };
 
-
-double
-find_animation_curve_at(double t);
+double find_animation_curve_at(double t);
 
 struct ashwc_toplevel;
 
-void
-toplevel_draw_borders(struct ashwc_toplevel *toplevel);
+void toplevel_draw_borders(struct ashwc_toplevel *toplevel);
 
-void
-toplevel_draw_shadow(struct ashwc_toplevel *toplevel);
+void toplevel_draw_shadow(struct ashwc_toplevel *toplevel);
 
-void
-toplevel_draw_placeholder(struct ashwc_toplevel *toplevel);
+void toplevel_draw_placeholder(struct ashwc_toplevel *toplevel);
 
-double
-calculate_animation_passed(struct ashwc_animation *animation);
+double calculate_animation_passed(struct ashwc_animation *animation);
 
-bool
-toplevel_animation_next_tick(struct ashwc_toplevel *toplevel);
+bool toplevel_animation_next_tick(struct ashwc_toplevel *toplevel);
 
-bool
-toplevel_draw_frame(struct ashwc_toplevel *toplevel);
+bool toplevel_draw_frame(struct ashwc_toplevel *toplevel);
 
-void
-toplevel_apply_clip(struct ashwc_toplevel *toplevel);
+void toplevel_apply_clip(struct ashwc_toplevel *toplevel);
 
-void
-toplevel_unclip_size(struct ashwc_toplevel *toplevel);
+void toplevel_unclip_size(struct ashwc_toplevel *toplevel);
 
 struct ashwc_workspace;
 
-void
-workspace_draw_frame(struct ashwc_workspace *workspace);
+void workspace_draw_frame(struct ashwc_workspace *workspace);
 
-void
-toplevel_apply_effects(struct ashwc_toplevel *toplevel);
+void toplevel_apply_effects(struct ashwc_toplevel *toplevel);
