@@ -37,6 +37,10 @@ void lock_surface_handle_destroy(struct wl_listener *listener, void *data) {
   struct ashwc_lock_surface *lock_surface =
       wl_container_of(listener, lock_surface, destroy);
 
+  wl_list_remove(&lock_surface->map.link);
+  wl_list_remove(&lock_surface->unmap.link);
+  wl_list_remove(&lock_surface->destroy.link);
+
   free(lock_surface);
 }
 
