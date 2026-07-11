@@ -66,8 +66,8 @@ inc = [
 
 deps = [
   dependency('wayland-server'),
-  dependency('scenefx-0.4', version: '>=0.4.0', fallback: 'scenefx'),
-  dependency('wlroots-0.19', version: ['>=0.19.0', '<0.20.0'], fallback: 'wlroots'),
+  dependency('scenefx-0.5', version: '>=0.5.0',),
+  dependency('wlroots-0.20', version: ['>=0.20.0', '<0.21.0'], fallback: 'wlroots'),
   dependency('xkbcommon'),
   dependency('libinput'),
 ]
@@ -91,4 +91,3 @@ install_data('default.conf', install_dir: get_option('datadir') / 'ashwc')
 install_data('LICENSE', install_dir: get_option('datadir') / 'licenses/ashwc')
 install_data('ashwc.desktop', install_dir: get_option('datadir') / 'wayland-sessions')
 install_data('ashwc-portals.conf', install_dir: get_option('datadir') / 'xdg-desktop-portal')
-

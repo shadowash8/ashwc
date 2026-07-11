@@ -1,6 +1,6 @@
 #include <regex.h>
 #include <scenefx/types/fx/blur_data.h>
-#include <scenefx/types/fx/corner_location.h>
+#include <scenefx/types/fx/clipped_region.h>
 
 #include "ashwc.h"
 #include "config.h"
@@ -774,25 +774,32 @@ bool config_handle_value(struct ashwc_config *c, char *keyword, char **args,
       goto invalid;
 
     if (strcmp(args[0], "all") == 0) {
-      c->border_radius_location = CORNER_LOCATION_ALL;
+      c->border_radius_corners.top_left = true;
+      c->border_radius_corners.top_right = true;
+      c->border_radius_corners.bottom_right = true;
+      c->border_radius_corners.bottom_left = true;
     } else {
       for (size_t i = 0; i < arg_count; i++) {
         if (strcmp(args[i], "top") == 0) {
-          c->border_radius_location |= CORNER_LOCATION_TOP;
+          c->border_radius_corners.top_left = true;
+          c->border_radius_corners.top_right = true;
         } else if (strcmp(args[i], "bottom") == 0) {
-          c->border_radius_location |= CORNER_LOCATION_BOTTOM;
+          c->border_radius_corners.bottom_left = true;
+          c->border_radius_corners.bottom_right = true;
         } else if (strcmp(args[i], "right") == 0) {
-          c->border_radius_location |= CORNER_LOCATION_RIGHT;
+          c->border_radius_corners.top_right = true;
+          c->border_radius_corners.bottom_right = true;
         } else if (strcmp(args[i], "left") == 0) {
-          c->border_radius_location |= CORNER_LOCATION_LEFT;
+          c->border_radius_corners.top_left = true;
+          c->border_radius_corners.bottom_left = true;
         } else if (strcmp(args[i], "top_right") == 0) {
-          c->border_radius_location |= CORNER_LOCATION_TOP_RIGHT;
+          c->border_radius_corners.top_right = true;
         } else if (strcmp(args[i], "bottom_right") == 0) {
-          c->border_radius_location |= CORNER_LOCATION_BOTTOM_RIGHT;
+          c->border_radius_corners.bottom_right = true;
         } else if (strcmp(args[i], "bottom_left") == 0) {
-          c->border_radius_location |= CORNER_LOCATION_BOTTOM_LEFT;
+          c->border_radius_corners.bottom_left = true;
         } else if (strcmp(args[i], "top_left") == 0) {
-          c->border_radius_location |= CORNER_LOCATION_TOP_LEFT;
+          c->border_radius_corners.top_left = true;
         }
       }
     }
@@ -1081,8 +1088,12 @@ void config_set_default_needed_params(struct ashwc_config *c) {
     wlr_log(WLR_INFO, "active_opacity not specified. using default %lf",
             c->active_opacity);
   }
-  if (c->border_radius_location == 0) {
-    c->border_radius_location = CORNER_LOCATION_ALL;
+  if (!c->border_radius_corners.top_left && !c->border_radius_corners.top_right &&
+      !c->border_radius_corners.bottom_right && !c->border_radius_corners.bottom_left) {
+    c->border_radius_corners.top_left = true;
+    c->border_radius_corners.top_right = true;
+    c->border_radius_corners.bottom_right = true;
+    c->border_radius_corners.bottom_left = true;
     wlr_log(WLR_INFO, "border_radius_location not specified. using all");
   }
   if (c->default_layout >= ASHWC_LAYOUT_COUNT) {

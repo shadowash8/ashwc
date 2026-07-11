@@ -4,7 +4,7 @@
 #include "helpers.h"
 
 #include <scenefx/types/fx/blur_data.h>
-#include <scenefx/types/fx/corner_location.h>
+#include <scenefx/types/fx/clipped_region.h>
 
 #include <libinput.h>
 #include <regex.h>
@@ -141,7 +141,12 @@ struct ashwc_config {
 
   /* eye-candy */
   uint32_t border_radius;
-  enum corner_location border_radius_location;
+  struct {
+    bool top_left;
+    bool top_right;
+    bool bottom_right;
+    bool bottom_left;
+  } border_radius_corners;
   bool blur;
   struct blur_data blur_params;
   bool shadows;

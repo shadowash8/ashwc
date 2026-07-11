@@ -8,6 +8,7 @@
 #include "layout.h"
 #include "output.h"
 #include "popup.h"
+#include "rendering.h"
 #include "something.h"
 #include "toplevel.h"
 #include "wlr-layer-shell-unstable-v1-protocol.h"
@@ -115,9 +116,22 @@ void layer_surface_handle_commit(struct wl_listener *listener, void *data) {
 
 void iter_scene_buffer_apply_blur(struct wlr_scene_buffer *buffer, int sx,
                                   int sy, void *data) {
-  wlr_scene_buffer_set_backdrop_blur(buffer, data);
-  wlr_scene_buffer_set_backdrop_blur_optimized(buffer, data);
-  wlr_scene_buffer_set_backdrop_blur_ignore_transparent(buffer, data);
+  bool enabled = (bool)(uintptr_t)data;
+
+  struct wlr_scene_surface *scene_surface =
+      wlr_scene_surface_try_from_buffer(buffer);
+  if (scene_surface == NULL)
+    return;
+  struct wlr_surface *surface = scene_surface->surface;
+
+  struct wlr_scene_blur *blur = buffer_ensure_blur(buffer);
+
+  if (enabled) {
+    wlr_scene_blur_set_size(blur, surface->current.width,
+                            surface->current.height);
+    wlr_scene_node_set_position(&blur->node, buffer->node.x, buffer->node.y);
+  }
+  wlr_scene_node_set_enabled(&blur->node, enabled);
 }
 
 void layer_surface_handle_map(struct wl_listener *listener, void *data) {

@@ -23,6 +23,8 @@ double find_animation_curve_at(double t);
 
 struct ashwc_toplevel;
 
+struct wlr_scene_blur *buffer_ensure_blur(struct wlr_scene_buffer *buffer);
+
 void toplevel_draw_borders(struct ashwc_toplevel *toplevel);
 
 void toplevel_draw_shadow(struct ashwc_toplevel *toplevel);

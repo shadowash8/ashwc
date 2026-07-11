@@ -1,5 +1,4 @@
 #include <scenefx/types/fx/clipped_region.h>
-#include <scenefx/types/fx/corner_location.h>
 #include <scenefx/types/wlr_scene.h>
 
 #include "rendering.h"
@@ -21,6 +20,47 @@
 
 extern struct ashwc_server server;
 
+struct ashwc_buffer_blur {
+  struct wlr_scene_blur *blur;
+  struct wl_listener destroy;
+};
+
+static void buffer_blur_handle_destroy(struct wl_listener *listener, void *data) {
+  struct ashwc_buffer_blur *bb = wl_container_of(listener, bb, destroy);
+  wl_list_remove(&bb->destroy.link);
+  free(bb);
+}
+
+/* creates (once) and returns the blur node backing this buffer, stored on
+ * buffer->node.data. safe to call every frame -- reuses the existing node
+ * after the first call. destroyed automatically when the buffer node is. */
+struct wlr_scene_blur *buffer_ensure_blur(struct wlr_scene_buffer *buffer) {
+  struct ashwc_buffer_blur *bb = buffer->node.data;
+  if (bb != NULL) {
+    return bb->blur;
+  }
+
+  bb = calloc(1, sizeof(*bb));
+  bb->blur = wlr_scene_blur_create(buffer->node.parent, 1, 1);
+  wlr_scene_node_place_below(&bb->blur->node, &buffer->node);
+  wlr_scene_node_set_enabled(&bb->blur->node, false);
+
+  bb->destroy.notify = buffer_blur_handle_destroy;
+  wl_signal_add(&buffer->node.events.destroy, &bb->destroy);
+
+  buffer->node.data = bb;
+
+  return bb->blur;
+}
+
+static struct fx_corner_radii config_corner_radii(uint32_t radius) {
+  return corner_radii_new(
+      server.config->border_radius_corners.top_left ? radius : 0,
+      server.config->border_radius_corners.top_right ? radius : 0,
+      server.config->border_radius_corners.bottom_right ? radius : 0,
+      server.config->border_radius_corners.bottom_left ? radius : 0);
+}
+
 void toplevel_draw_borders(struct ashwc_toplevel *toplevel) {
   if (toplevel->border != NULL && toplevel->fullscreen) {
     wlr_scene_node_set_enabled(&toplevel->border->node, false);
@@ -29,8 +69,7 @@ void toplevel_draw_borders(struct ashwc_toplevel *toplevel) {
 
   uint32_t border_width = server.config->border_width;
   uint32_t border_radius = server.config->border_radius;
-  enum corner_location border_radius_location =
-      server.config->border_radius_location;
+  struct fx_corner_radii border_radii = config_corner_radii(border_radius);
 
   float *border_color = toplevel == server.focused_toplevel
                             ? server.config->active_border_color
@@ -41,9 +80,8 @@ void toplevel_draw_borders(struct ashwc_toplevel *toplevel) {
         wlr_scene_rect_create(toplevel->scene_tree, 0, 0, border_color);
     wlr_scene_node_lower_to_bottom(&toplevel->border->node);
     wlr_scene_node_set_position(&toplevel->border->node, -border_width,
-                                -border_width);
-    wlr_scene_rect_set_corner_radius(toplevel->border, border_radius,
-                                     border_radius_location);
+                               -border_width);
+    wlr_scene_rect_set_corner_radii(toplevel->border, border_radii);
   }
 
   wlr_scene_node_set_enabled(&toplevel->border->node, true);
@@ -56,8 +94,8 @@ void toplevel_draw_borders(struct ashwc_toplevel *toplevel) {
 
   struct clipped_region clipped_region = {
       .area = {border_width, border_width, width, height},
-      .corner_radius = max((int32_t)border_radius - (int32_t)border_width, 0),
-      .corners = border_radius_location,
+      .corners= config_corner_radii(
+          max((int32_t)border_radius - (int32_t)border_width, 0)),
   };
   wlr_scene_rect_set_clipped_region(toplevel->border, clipped_region);
 
@@ -104,41 +142,53 @@ void iter_scene_buffer_apply_effects(struct wlr_scene_buffer *buffer, int lx,
   int32_t x = lx - args->root_x;
   int32_t y = ly - args->root_y;
 
-  enum corner_location corners = 0;
+  struct fx_corner_radii corners = corner_radii_none();
 
-  if (server.config->border_radius_location & CORNER_LOCATION_TOP_LEFT &&
-      x == 0 && y == 0) {
-    corners |= CORNER_LOCATION_TOP_LEFT;
+  if (server.config->border_radius_corners.top_left && x == 0 && y == 0) {
+    corners.top_left = (uint16_t)args->border_radius;
   }
 
-  if (server.config->border_radius_location & CORNER_LOCATION_BOTTOM_LEFT &&
-      x == 0 && y + surface->current.height == args->geometry.height) {
-    corners |= CORNER_LOCATION_BOTTOM_LEFT;
+  if (server.config->border_radius_corners.bottom_left && x == 0 &&
+      y + surface->current.height == args->geometry.height) {
+    corners.bottom_left = (uint16_t)args->border_radius;
   }
 
-  if (server.config->border_radius_location & CORNER_LOCATION_TOP_RIGHT &&
+  if (server.config->border_radius_corners.top_right &&
       x + surface->current.width == args->geometry.width && y == 0) {
-    corners |= CORNER_LOCATION_TOP_RIGHT;
+    corners.top_right = (uint16_t)args->border_radius;
   }
 
-  if (server.config->border_radius_location & CORNER_LOCATION_BOTTOM_RIGHT &&
+  if (server.config->border_radius_corners.bottom_right &&
       x + surface->current.width == args->geometry.width &&
       y + surface->current.height == args->geometry.height) {
-    corners |= CORNER_LOCATION_BOTTOM_RIGHT;
+    corners.bottom_right = (uint16_t)args->border_radius;
   }
 
-  wlr_scene_buffer_set_corner_radius(buffer, args->border_radius, corners);
+  wlr_scene_buffer_set_corner_radii(buffer, corners);
 
   /* we dont blur subsurfaces */
   if (wlr_subsurface_try_from_wlr_surface(surface) != NULL)
     return;
 
+  struct wlr_scene_blur *blur = buffer_ensure_blur(buffer);
+
   if (server.config->blur) {
-    wlr_scene_buffer_set_backdrop_blur(buffer, true);
-    wlr_scene_buffer_set_backdrop_blur_optimized(buffer, true);
-    wlr_scene_buffer_set_backdrop_blur_ignore_transparent(buffer, false);
+    wlr_scene_blur_set_size(blur, surface_width, surface_height);
+    wlr_scene_node_set_position(&blur->node, buffer->node.x, buffer->node.y);
+
+    wlr_scene_blur_set_corner_radii(
+        blur,
+        config_corner_radii(args->border_radius));
+
+    struct clipped_region clipped_region = {
+        .area = {0, 0, surface_width, surface_height},
+        .corners = config_corner_radii(args->border_radius),
+    };
+    wlr_scene_blur_set_clipped_region(blur, clipped_region);
+
+    wlr_scene_node_set_enabled(&blur->node, true);
   } else {
-    wlr_scene_buffer_set_backdrop_blur(buffer, false);
+    wlr_scene_node_set_enabled(&blur->node, false);
   }
 }
 
@@ -287,8 +337,7 @@ void toplevel_draw_shadow(struct ashwc_toplevel *toplevel) {
 
   struct clipped_region clipped_region = {
       .area = intersection_box,
-      .corner_radius = server.config->border_radius,
-      .corners = server.config->border_radius_location,
+      .corners = config_corner_radii(server.config->border_radius),
   };
 
   if (toplevel->shadow == NULL) {
