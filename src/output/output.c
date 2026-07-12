@@ -46,12 +46,9 @@ void server_handle_new_output(struct wl_listener *listener, void *data) {
   output->wlr_output = wlr_output;
 
   output->workspace_group =
-    wlr_ext_workspace_group_handle_v1_create(
-                                             server.workspace_manager,
-                                             0);
+      wlr_ext_workspace_group_handle_v1_create(server.workspace_manager, 0);
 
-  wlr_ext_workspace_group_handle_v1_output_enter(
-                                                 output->workspace_group,
+  wlr_ext_workspace_group_handle_v1_output_enter(output->workspace_group,
                                                  output->wlr_output);
 
   wlr_output->data = output;
@@ -486,6 +483,7 @@ void focus_output(struct ashwc_output *output, enum ashwc_direction side) {
 
   struct ashwc_toplevel *focus_next = NULL;
   struct ashwc_workspace *workspace = output->active_workspace;
+  struct ashwc_workspace *old_workspace = output->active_workspace;
 
   if (workspace->fullscreen_toplevel != NULL) {
     focus_next = workspace->fullscreen_toplevel;
@@ -512,6 +510,11 @@ void focus_output(struct ashwc_output *output, enum ashwc_direction side) {
   }
 
   server.active_workspace = workspace;
+  workspace->output->active_workspace = workspace;
+
+  workspace_update_hidden(old_workspace);
+  workspace_update_hidden(workspace);
+
   ipc_broadcast_message(IPC_ACTIVE_WORKSPACE);
 
   if (focus_next == NULL) {

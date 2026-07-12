@@ -166,6 +166,7 @@ void toplevel_handle_map(struct wl_listener *listener, void *data) {
 
   if (toplevel->floating) {
     wl_list_insert(&toplevel->workspace->floating_toplevels, &toplevel->link);
+    workspace_update_hidden(toplevel->workspace);
     toplevel->scene_tree = wlr_scene_xdg_surface_create(
         server.floating_tree, toplevel->xdg_toplevel->base);
   } else {
@@ -175,6 +176,8 @@ void toplevel_handle_map(struct wl_listener *listener, void *data) {
     } else {
       wl_list_insert(toplevel->workspace->slaves.prev, &toplevel->link);
     }
+
+    workspace_update_hidden(toplevel->workspace);
 
     toplevel->scene_tree = wlr_scene_xdg_surface_create(
         server.tiled_tree, toplevel->xdg_toplevel->base);
@@ -310,6 +313,7 @@ void toplevel_handle_unmap(struct wl_listener *listener, void *data) {
     }
 
     wl_list_remove(&toplevel->link);
+    workspace_update_hidden(workspace);
     return;
   }
 
@@ -345,6 +349,7 @@ void toplevel_handle_unmap(struct wl_listener *listener, void *data) {
 
     /* we finally remove him from the list */
     wl_list_remove(&toplevel->link);
+    workspace_update_hidden(workspace);
   } else {
     if (toplevel == server.focused_toplevel) {
       /* we want to give focus to some other toplevel */
@@ -363,6 +368,7 @@ void toplevel_handle_unmap(struct wl_listener *listener, void *data) {
     }
 
     wl_list_remove(&toplevel->link);
+    workspace_update_hidden(workspace);
   }
 
   layout_set_pending_state(toplevel->workspace);
@@ -1009,7 +1015,8 @@ toplevel_find_closest_floating_on_workspace(struct ashwc_toplevel *toplevel,
     }
     return min;
   }
-  default: return NULL;
+  default:
+    return NULL;
   }
 }
 

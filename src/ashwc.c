@@ -25,6 +25,7 @@
 #include "wlr/types/wlr_data_control_v1.h"
 #include "wlr/types/wlr_data_device.h"
 #include "wlr/types/wlr_foreign_toplevel_management_v1.h"
+#include "wlr/types/wlr_output_management_v1.h"
 #include "wlr/types/wlr_screencopy_v1.h"
 #include "wlr/types/wlr_seat.h"
 #include "wlr/types/wlr_subcompositor.h"
@@ -32,7 +33,6 @@
 #include "wlr/types/wlr_xcursor_manager.h"
 #include "wlr/types/wlr_xdg_decoration_v1.h"
 #include "wlr/types/wlr_xdg_output_v1.h"
-#include "wlr/types/wlr_output_management_v1.h"
 #include "wlr/util/log.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -43,11 +43,11 @@
 #include <wayland-util.h>
 #include <wlr/backend/session.h>
 #include <wlr/types/wlr_export_dmabuf_v1.h>
+#include <wlr/types/wlr_ext_workspace_v1.h>
 #include <wlr/types/wlr_fractional_scale_v1.h>
 #include <wlr/types/wlr_gamma_control_v1.h>
 #include <wlr/types/wlr_keyboard_shortcuts_inhibit_v1.h>
 #include <wlr/types/wlr_output_management_v1.h>
-#include <wlr/types/wlr_ext_workspace_v1.h>
 #include <wlr/types/wlr_presentation_time.h>
 #include <wlr/types/wlr_session_lock_v1.h>
 #include <wlr/types/wlr_virtual_keyboard_v1.h>
@@ -245,18 +245,15 @@ int main(int argc, char *argv[]) {
   server.scene_layout =
       wlr_scene_attach_output_layout(server.scene, server.output_layout);
 
-
   /* Create a workspace manager */
   server.workspace_manager =
-    wlr_ext_workspace_manager_v1_create(server.wl_display, 1);
+      wlr_ext_workspace_manager_v1_create(server.wl_display, 1);
 
-  server.workspace_manager_commit.notify =
-    workspace_manager_handle_commit;
+  server.workspace_manager_commit.notify = workspace_manager_handle_commit;
   wl_signal_add(&server.workspace_manager->events.commit,
                 &server.workspace_manager_commit);
 
-  server.workspace_manager_destroy.notify =
-    workspace_manager_handle_destroy;
+  server.workspace_manager_destroy.notify = workspace_manager_handle_destroy;
   wl_signal_add(&server.workspace_manager->events.destroy,
                 &server.workspace_manager_destroy);
 
@@ -376,9 +373,11 @@ int main(int argc, char *argv[]) {
   wlr_xdg_output_manager_v1_create(server.wl_display, server.output_layout);
   server.output_manager = wlr_output_manager_v1_create(server.wl_display);
   server.output_manager_apply.notify = output_manager_handle_apply;
-  wl_signal_add(&server.output_manager->events.apply, &server.output_manager_apply);
+  wl_signal_add(&server.output_manager->events.apply,
+                &server.output_manager_apply);
   server.output_manager_test.notify = output_manager_handle_test;
-  wl_signal_add(&server.output_manager->events.test, &server.output_manager_test);
+  wl_signal_add(&server.output_manager->events.test,
+                &server.output_manager_test);
 
   wlr_viewporter_create(server.wl_display);
   wlr_presentation_create(server.wl_display, server.backend, 1);

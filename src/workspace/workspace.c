@@ -29,16 +29,10 @@ void workspace_create_for_output(struct ashwc_output *output,
   snprintf(id, sizeof(id), "%u", workspace->index);
 
   workspace->ext_workspace =
-    wlr_ext_workspace_handle_v1_create(
-                                       server.workspace_manager,
-                                       id,
-                                       0);
+      wlr_ext_workspace_handle_v1_create(server.workspace_manager, id, 0);
 
-  wlr_ext_workspace_handle_v1_set_name(
-                                       workspace->ext_workspace,
-                                       id);
-  wlr_ext_workspace_handle_v1_set_group(
-                                        workspace->ext_workspace,
+  wlr_ext_workspace_handle_v1_set_name(workspace->ext_workspace, id);
+  wlr_ext_workspace_handle_v1_set_group(workspace->ext_workspace,
                                         output->workspace_group);
 
   wl_list_insert(&output->workspaces, &workspace->link);
@@ -46,9 +40,7 @@ void workspace_create_for_output(struct ashwc_output *output,
   /* if first then set it active */
   if (output->active_workspace == NULL) {
     output->active_workspace = workspace;
-    wlr_ext_workspace_handle_v1_set_active(
-                                           workspace->ext_workspace,
-                                           true);
+    wlr_ext_workspace_handle_v1_set_active(workspace->ext_workspace, true);
   }
 
   struct keybind *k;
@@ -66,12 +58,15 @@ void workspace_create_for_output(struct ashwc_output *output,
       k->initialized = true;
     }
   }
+  workspace_update_hidden(workspace);
 }
 
 void change_workspace(struct ashwc_workspace *workspace, bool keep_focus) {
   /* if it is the same as global active workspace, do nothing */
   if (server.active_workspace == workspace)
     return;
+
+  struct ashwc_workspace *old_workspace = workspace->output->active_workspace;
 
   /* if it is an already active on its output, just switch to it */
   if (workspace == workspace->output->active_workspace) {
@@ -137,17 +132,17 @@ void change_workspace(struct ashwc_workspace *workspace, bool keep_focus) {
 
   if (workspace->output->active_workspace) {
     wlr_ext_workspace_handle_v1_set_active(
-                                           workspace->output->active_workspace->ext_workspace,
-                                           false);
+        workspace->output->active_workspace->ext_workspace, false);
   }
 
   server.active_workspace = workspace;
   workspace->output->active_workspace = workspace;
   ipc_broadcast_message(IPC_ACTIVE_WORKSPACE);
 
-  wlr_ext_workspace_handle_v1_set_active(
-                                         workspace->ext_workspace,
-                                         true);
+  wlr_ext_workspace_handle_v1_set_active(workspace->ext_workspace, true);
+
+  workspace_update_hidden(old_workspace);
+  workspace_update_hidden(workspace);
 
   /* same as above */
   if (keep_focus) {
@@ -277,6 +272,8 @@ void toplevel_move_to_workspace(struct ashwc_toplevel *toplevel,
   }
 
   /* change active workspace */
+  workspace_update_hidden(old_workspace);
+  workspace_update_hidden(workspace);
   change_workspace(workspace, true);
 }
 
@@ -316,44 +313,57 @@ workspace_find_closest_floating_toplevel(struct ashwc_workspace *workspace,
     return min_x;
   case ASHWC_RIGHT:
     return max_x;
-  default: return NULL;
+  default:
+    return NULL;
   }
 }
 
-void workspace_manager_handle_commit(struct wl_listener *listener,
-                                     void *data) {
-    struct wlr_ext_workspace_v1_commit_event *event = data;
+void workspace_manager_handle_commit(struct wl_listener *listener, void *data) {
+  struct wlr_ext_workspace_v1_commit_event *event = data;
 
-    struct wlr_ext_workspace_v1_request *request;
+  struct wlr_ext_workspace_v1_request *request;
 
-    wl_list_for_each(request, event->requests, link) {
-        switch (request->type) {
+  wl_list_for_each(request, event->requests, link) {
+    switch (request->type) {
 
-        case WLR_EXT_WORKSPACE_V1_REQUEST_ACTIVATE: {
-            struct ashwc_output *output;
-            wl_list_for_each(output, &server.outputs, link) {
+    case WLR_EXT_WORKSPACE_V1_REQUEST_ACTIVATE: {
+      struct ashwc_output *output;
+      wl_list_for_each(output, &server.outputs, link) {
 
-                struct ashwc_workspace *workspace;
-                wl_list_for_each(workspace, &output->workspaces, link) {
+        struct ashwc_workspace *workspace;
+        wl_list_for_each(workspace, &output->workspaces, link) {
 
-                    if (workspace->ext_workspace ==
-                        request->activate.workspace) {
-                        change_workspace(workspace, false);
-                        break;
-                    }
-                }
-            }
+          if (workspace->ext_workspace == request->activate.workspace) {
+            change_workspace(workspace, false);
             break;
+          }
         }
-
-        default:
-            break;
-        }
+      }
+      break;
     }
+
+    default:
+      break;
+    }
+  }
+}
+
+void workspace_update_hidden(struct ashwc_workspace *workspace) {
+  bool has_toplevels = !wl_list_empty(&workspace->masters) ||
+                       !wl_list_empty(&workspace->slaves) ||
+                       !wl_list_empty(&workspace->floating_toplevels) ||
+                       workspace->fullscreen_toplevel != NULL;
+
+  bool is_active = workspace->output != NULL &&
+                   workspace->output->active_workspace == workspace;
+
+  bool hidden = !has_toplevels && !is_active;
+
+  wlr_ext_workspace_handle_v1_set_hidden(workspace->ext_workspace, hidden);
 }
 
 void workspace_manager_handle_destroy(struct wl_listener *listener,
                                       void *data) {
-    wl_list_remove(&server.workspace_manager_commit.link);
-    wl_list_remove(&server.workspace_manager_destroy.link);
+  wl_list_remove(&server.workspace_manager_commit.link);
+  wl_list_remove(&server.workspace_manager_destroy.link);
 }
