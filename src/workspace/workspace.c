@@ -25,12 +25,30 @@ void workspace_create_for_output(struct ashwc_output *output,
   workspace->output = output;
   workspace->index = config->index;
   workspace->config = config;
+  char id[16];
+  snprintf(id, sizeof(id), "%u", workspace->index);
+
+  workspace->ext_workspace =
+    wlr_ext_workspace_handle_v1_create(
+                                       server.workspace_manager,
+                                       id,
+                                       0);
+
+  wlr_ext_workspace_handle_v1_set_name(
+                                       workspace->ext_workspace,
+                                       id);
+  wlr_ext_workspace_handle_v1_set_group(
+                                        workspace->ext_workspace,
+                                        output->workspace_group);
 
   wl_list_insert(&output->workspaces, &workspace->link);
 
   /* if first then set it active */
   if (output->active_workspace == NULL) {
     output->active_workspace = workspace;
+    wlr_ext_workspace_handle_v1_set_active(
+                                           workspace->ext_workspace,
+                                           true);
   }
 
   struct keybind *k;
@@ -117,9 +135,19 @@ void change_workspace(struct ashwc_workspace *workspace, bool keep_focus) {
     cursor_jump_output(workspace->output);
   }
 
+  if (workspace->output->active_workspace) {
+    wlr_ext_workspace_handle_v1_set_active(
+                                           workspace->output->active_workspace->ext_workspace,
+                                           false);
+  }
+
   server.active_workspace = workspace;
   workspace->output->active_workspace = workspace;
   ipc_broadcast_message(IPC_ACTIVE_WORKSPACE);
+
+  wlr_ext_workspace_handle_v1_set_active(
+                                         workspace->ext_workspace,
+                                         true);
 
   /* same as above */
   if (keep_focus) {

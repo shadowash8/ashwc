@@ -47,6 +47,7 @@
 #include <wlr/types/wlr_gamma_control_v1.h>
 #include <wlr/types/wlr_keyboard_shortcuts_inhibit_v1.h>
 #include <wlr/types/wlr_output_management_v1.h>
+#include <wlr/types/wlr_ext_workspace_v1.h>
 #include <wlr/types/wlr_presentation_time.h>
 #include <wlr/types/wlr_session_lock_v1.h>
 #include <wlr/types/wlr_virtual_keyboard_v1.h>
@@ -243,6 +244,10 @@ int main(int argc, char *argv[]) {
   server.scene = wlr_scene_create();
   server.scene_layout =
       wlr_scene_attach_output_layout(server.scene, server.output_layout);
+
+
+  server.workspace_manager =
+    wlr_ext_workspace_manager_v1_create(server.wl_display, 1);
 
   /* create all the scenes in the correct order */
   server.background_tree = wlr_scene_tree_create(&server.scene->tree);

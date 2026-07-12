@@ -124,6 +124,8 @@ struct ashwc_server {
   struct wl_listener output_manager_apply;
   struct wl_listener output_manager_test;
 
+  struct wlr_ext_workspace_manager_v1 *workspace_manager;
+
   struct wlr_xdg_decoration_manager_v1 *xdg_decoration_manager;
   struct wl_listener request_xdg_decoration;
 

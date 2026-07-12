@@ -8,6 +8,7 @@
 #include "toplevel/toplevel.h"
 
 #include <wayland-server-protocol.h>
+#include <wlr/types/wlr_ext_workspace_v1.h>
 
 struct ashwc_animation;
 
@@ -17,6 +18,7 @@ struct ashwc_workspace {
   struct ashwc_output *output;
   uint32_t index;
   struct workspace_config *config;
+  struct wlr_ext_workspace_handle_v1 *ext_workspace;
 
   struct wl_list masters;
   struct wl_list slaves;

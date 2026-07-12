@@ -45,6 +45,15 @@ void server_handle_new_output(struct wl_listener *listener, void *data) {
   struct ashwc_output *output = calloc(1, sizeof(*output));
   output->wlr_output = wlr_output;
 
+  output->workspace_group =
+    wlr_ext_workspace_group_handle_v1_create(
+                                             server.workspace_manager,
+                                             0);
+
+  wlr_ext_workspace_group_handle_v1_output_enter(
+                                                 output->workspace_group,
+                                                 output->wlr_output);
+
   wlr_output->data = output;
 
   output->frame.notify = output_handle_frame;

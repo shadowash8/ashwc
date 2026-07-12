@@ -13,6 +13,7 @@ struct ashwc_output {
   struct wlr_scene_output *scene_output;
   struct wl_list workspaces;
   struct wlr_box usable_area;
+  struct wlr_ext_workspace_group_handle_v1 *workspace_group;
 
   struct {
     struct wl_list background;
