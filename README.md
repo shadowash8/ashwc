@@ -96,6 +96,10 @@ for detailed documentation see `examples/example.conf`. you can also find the de
 <img src="assets/gallery-2.png" alt="logo" width="500">
 </div>
 
+## community
+
+join us at [discord](https://discord.gg/rXpdbaxe2v)
+
 ## acknowledgement
 
 `ashwc` is a fork of the amazing [mwc](https://github.com/nikoloc/mwc) made by [nikoloc](https://github.com/nikoloc)
