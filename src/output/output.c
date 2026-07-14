@@ -87,16 +87,12 @@ void server_handle_new_output(struct wl_listener *listener, void *data) {
             "using default workspace 0. please add a valid workspace config.",
             wlr_output->name);
 
-    struct ashwc_workspace *workspace = calloc(1, sizeof(*workspace));
-    wl_list_init(&workspace->floating_toplevels);
-    wl_list_init(&workspace->masters);
-    wl_list_init(&workspace->slaves);
-    workspace->output = output;
-    workspace->index = 0;
+    struct workspace_config *synthetic = calloc(1, sizeof(*synthetic));
+    synthetic->index = 0;
+    synthetic->output = strdup(wlr_output->name);
+    wl_list_insert(&server.config->workspaces, &synthetic->link);
 
-    wl_list_insert(&output->workspaces, &workspace->link);
-
-    output->active_workspace = workspace;
+    workspace_create_for_output(output, synthetic);
   }
 
   wl_list_init(&output->layers.background);
