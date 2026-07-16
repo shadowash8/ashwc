@@ -34,8 +34,8 @@ although `ashwc` is aiming to be really simple in its behaviour, it does provide
 - libdrm
 - pixman
 - libxkbcommon
-- wlroots 19.0
-- scenefx 0.4
+- wlroots 20.0
+- scenefx 0.5
 
 > \* compile-time dependencies
 
