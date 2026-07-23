@@ -124,6 +124,9 @@ void toplevel_handle_initial_commit(struct ashwc_toplevel *toplevel) {
   }
 
   wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, width, height);
+  wlr_xdg_toplevel_set_wm_capabilities(
+      toplevel->xdg_toplevel, WLR_XDG_TOPLEVEL_WM_CAPABILITIES_FULLSCREEN);
+
   wlr_xdg_toplevel_set_tiled(toplevel->xdg_toplevel,
                              WLR_EDGE_TOP | WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM |
                                  WLR_EDGE_LEFT);
