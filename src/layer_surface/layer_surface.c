@@ -171,7 +171,9 @@ void layer_surface_handle_unmap(struct wl_listener *listener, void *data) {
   struct ashwc_layer_surface *layer_surface =
       wl_container_of(listener, layer_surface, unmap);
 
-  wl_list_remove(&layer_surface->link);
+  if (layer_surface->link.prev != NULL) {
+    wl_list_remove(&layer_surface->link);
+  }
 
   struct ashwc_output *output = layer_surface->wlr_layer_surface->output->data;
 
@@ -226,6 +228,10 @@ void layer_surface_handle_unmap(struct wl_listener *listener, void *data) {
 void layer_surface_handle_destroy(struct wl_listener *listener, void *data) {
   struct ashwc_layer_surface *layer_surface =
       wl_container_of(listener, layer_surface, destroy);
+
+  if (layer_surface->link.prev != NULL) {
+    wl_list_remove(&layer_surface->link);
+  }
 
   wl_list_remove(&layer_surface->commit.link);
   wl_list_remove(&layer_surface->new_popup.link);
