@@ -10,9 +10,9 @@
 #include <wlr/types/wlr_cursor_shape_v1.h>
 #include <wlr/types/wlr_gamma_control_v1.h>
 #include <wlr/types/wlr_keyboard_shortcuts_inhibit_v1.h>
+#include <wlr/types/wlr_output_management_v1.h>
 #include <wlr/types/wlr_pointer_constraints_v1.h>
 #include <wlr/types/wlr_relative_pointer_v1.h>
-#include <wlr/types/wlr_output_management_v1.h>
 #include <wlr/types/wlr_server_decoration.h>
 #include <wlr/util/box.h>
 
@@ -128,6 +128,7 @@ struct ashwc_server {
   struct wlr_ext_workspace_manager_v1 *workspace_manager;
   struct wl_listener workspace_manager_commit;
   struct wl_listener workspace_manager_destroy;
+  struct wl_list stashed_workspaces;
 
   struct wlr_xdg_decoration_manager_v1 *xdg_decoration_manager;
   struct wl_listener request_xdg_decoration;

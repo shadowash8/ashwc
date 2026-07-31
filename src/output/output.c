@@ -262,6 +262,22 @@ bool output_transfer_existing_workspaces(struct ashwc_output *output) {
   bool found = false;
   struct ashwc_output *o;
   struct ashwc_workspace *w, *tmp;
+
+  /* reclaim from stash first (covers the "last output disconnected and
+   * reconnected" case) */
+  wl_list_for_each_safe(w, tmp, &server.stashed_workspaces, link) {
+    if (w->config != NULL &&
+        strcmp(w->config->output, output->wlr_output->name) == 0) {
+      w->output = output;
+      wl_list_remove(&w->link);
+      wl_list_insert(&output->workspaces, &w->link);
+      if (output->active_workspace == NULL) {
+        output->active_workspace = w;
+      }
+      found = true;
+    }
+  }
+
   wl_list_for_each(o, &server.outputs, link) {
     wl_list_for_each_safe(w, tmp, &o->workspaces, link) {
       if (w->config != NULL &&
@@ -613,6 +629,18 @@ void output_handle_destroy(struct wl_listener *listener, void *data) {
         wl_list_insert(&new->workspaces, &w->link);
         layout_set_pending_state(w);
       }
+    } else {
+      /* last output going away: stash its workspaces so a reconnecting
+       * output can reclaim the *same* structs instead of us leaking them
+       * and leaving stale pointers (server.active_workspace, keybinds)
+       * dangling. */
+      struct ashwc_workspace *w, *tmp;
+      wl_list_for_each_safe(w, tmp, &output->workspaces, link) {
+        w->output = NULL;
+        wl_list_remove(&w->link);
+        wl_list_insert(&server.stashed_workspaces, &w->link);
+      }
+      server.active_workspace = NULL;
     }
   }
 

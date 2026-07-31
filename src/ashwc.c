@@ -232,6 +232,7 @@ int main(int argc, char *argv[]) {
   /* Configure a listener to be notified when new outputs are available on the
    * backend. */
   wl_list_init(&server.outputs);
+  wl_list_init(&server.stashed_workspaces);
   server.new_output.notify = server_handle_new_output;
   wl_signal_add(&server.backend->events.new_output, &server.new_output);
 
