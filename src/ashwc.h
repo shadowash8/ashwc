@@ -129,6 +129,7 @@ struct ashwc_server {
   struct wl_listener workspace_manager_commit;
   struct wl_listener workspace_manager_destroy;
   struct wl_list stashed_workspaces;
+  struct ashwc_workspace *stashed_active_workspace;
 
   struct wlr_xdg_decoration_manager_v1 *xdg_decoration_manager;
   struct wl_listener request_xdg_decoration;

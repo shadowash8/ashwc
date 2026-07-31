@@ -95,6 +95,34 @@ void server_handle_new_output(struct wl_listener *listener, void *data) {
     workspace_create_for_output(output, synthetic);
   }
 
+  /* Set active workspace back to the lowest index (Workspace 1) and sync scene
+   * graph */
+  if (!found && !wl_list_empty(&output->workspaces)) {
+    struct ashwc_workspace *w, *target = NULL;
+
+    wl_list_for_each(w, &output->workspaces, link) {
+      if (target == NULL || (w->config && target->config &&
+                             w->config->index < target->config->index)) {
+        target = w;
+      }
+    }
+
+    if (target != NULL) {
+      output->active_workspace = target;
+      server.active_workspace =
+          target; /* Keep server active workspace in sync */
+
+      if (target->ext_workspace) {
+        wlr_ext_workspace_handle_v1_set_active(target->ext_workspace, true);
+      }
+
+      /* Re-evaluate hidden/visible state for all scene nodes on this output */
+      wl_list_for_each(w, &output->workspaces, link) {
+        workspace_update_hidden(w);
+      }
+    }
+  }
+
   wl_list_init(&output->layers.background);
   wl_list_init(&output->layers.bottom);
   wl_list_init(&output->layers.top);
@@ -108,25 +136,21 @@ void server_handle_new_output(struct wl_listener *listener, void *data) {
 
   output_update_manager_config();
 
-  /* if there were some existing workspaces then we reconfigure them */
+  /* If there were existing workspaces, recalculate layout and visibility */
   if (found) {
     struct ashwc_workspace *w;
     wl_list_for_each(w, &output->workspaces, link) {
       layout_set_pending_state(w);
-      /* this pathces some ghosts that might have been left in the scene */
-      if (w != output->active_workspace) {
-        struct ashwc_toplevel *t;
-        wl_list_for_each(t, &w->floating_toplevels, link) {
-          wlr_scene_node_set_enabled(&t->scene_tree->node, false);
-        }
-        wl_list_for_each(t, &w->masters, link) {
-          wlr_scene_node_set_enabled(&t->scene_tree->node, false);
-        }
-        wl_list_for_each(t, &w->slaves, link) {
-          wlr_scene_node_set_enabled(&t->scene_tree->node, false);
-        }
-      }
+      /* workspace_update_hidden() enables nodes for active_workspace
+       * and disables nodes for hidden workspaces */
+      workspace_update_hidden(w);
     }
+  }
+
+  /* Sync global server active workspace pointer */
+  if (server.active_workspace == NULL ||
+      server.active_workspace->output == NULL) {
+    server.active_workspace = output->active_workspace;
   }
 
   if (server.config->blur) {
@@ -259,8 +283,9 @@ bool output_transfer_existing_workspaces(struct ashwc_output *output) {
   bool found = false;
   struct ashwc_output *o;
   struct ashwc_workspace *w, *tmp;
+  struct ashwc_workspace *restored_active = NULL;
 
-  /* Reclaim from stash (last output reconnected) */
+  /* Reclaim from stash (last output reconnected / TTY switch back) */
   wl_list_for_each_safe(w, tmp, &server.stashed_workspaces, link) {
     w->output = output;
     wl_list_remove(&w->link);
@@ -272,23 +297,33 @@ bool output_transfer_existing_workspaces(struct ashwc_output *output) {
                                             output->workspace_group);
     }
 
-    /* Set active workspace state */
-    if (output->active_workspace == NULL) {
-      output->active_workspace = w;
-      if (w->ext_workspace) {
-        wlr_ext_workspace_handle_v1_set_active(w->ext_workspace, true);
-      }
-    } else if (w->ext_workspace) {
-      wlr_ext_workspace_handle_v1_set_active(w->ext_workspace, false);
+    /* Check if this was the workspace active before the TTY switch */
+    if (w == server.stashed_active_workspace) {
+      restored_active = w;
     }
-
-    /* Notify status update (so hidden flags recalculate) */
-    workspace_update_hidden(w);
 
     found = true;
   }
 
   if (found) {
+    /* Fallback to first reclaimed workspace if stashed_active_workspace was
+     * NULL */
+    if (restored_active == NULL && !wl_list_empty(&output->workspaces)) {
+      restored_active =
+          wl_container_of(output->workspaces.next, restored_active, link);
+    }
+
+    output->active_workspace = restored_active;
+    server.stashed_active_workspace = NULL; /* Clear stash pointer */
+
+    /* Update ext-workspace handles */
+    wl_list_for_each(w, &output->workspaces, link) {
+      if (w->ext_workspace) {
+        wlr_ext_workspace_handle_v1_set_active(w->ext_workspace,
+                                               w == output->active_workspace);
+      }
+    }
+
     return true;
   }
 
@@ -654,6 +689,8 @@ void output_handle_destroy(struct wl_listener *listener, void *data) {
        * and leaving stale pointers (server.active_workspace, keybinds)
        * dangling. */
       struct ashwc_workspace *w, *tmp;
+      server.stashed_active_workspace = output->active_workspace;
+
       wl_list_for_each_safe(w, tmp, &output->workspaces, link) {
         w->output = NULL;
         wl_list_remove(&w->link);
