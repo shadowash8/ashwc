@@ -8,10 +8,20 @@
 
 struct ashwc_pointer {
   struct wlr_pointer *wlr_pointer;
-  const char *name;
-  struct wl_list link;
+
+  char *name;
 
   struct wl_listener destroy;
+
+  struct wl_listener swipe_begin;
+  struct wl_listener swipe_update;
+  struct wl_listener swipe_end;
+
+  struct wl_list link;
+
+  uint32_t swipe_fingers;
+  double swipe_dx;
+  double swipe_dy;
 };
 
 struct ashwc_pointer_constraint {
@@ -63,6 +73,12 @@ void constraint_move_to_hint(struct ashwc_pointer_constraint *constraint);
 
 void server_handle_new_relative_pointer(struct wl_listener *listener,
                                         void *data);
+
+void pointer_handle_swipe_begin(struct wl_listener *listener, void *data);
+
+void pointer_handle_swipe_update(struct wl_listener *listener, void *data);
+
+void pointer_handle_swipe_end(struct wl_listener *listener, void *data);
 
 void server_handle_relative_pointer_manager_destroy(
     struct wl_listener *listener, void *data);

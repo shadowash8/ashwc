@@ -4,6 +4,7 @@
 
 #include "ashwc.h"
 #include "config.h"
+#include "gestures/gestures.h"
 #include "keybinds/keybinds.h"
 #include "keyboard/keyboard.h"
 #include "layer_surface/layer_surface.h"
@@ -517,6 +518,117 @@ void config_free_args(char **args, size_t arg_count) {
   free(args);
 }
 
+bool config_add_gesture(struct ashwc_config *c, char *type, char *fingers,
+                        char *direction, char *action, char **args,
+                        size_t arg_count) {
+  struct gesture *g = calloc(1, sizeof(*g));
+
+  /* gesture type */
+  if (strcmp(type, "swipe") == 0) {
+    g->type = GESTURE_SWIPE;
+  } else if (strcmp(type, "pinch") == 0) {
+    g->type = GESTURE_PINCH;
+  } else {
+    wlr_log(WLR_ERROR, "invalid gesture type '%s'", type);
+    free(g);
+    return false;
+  }
+
+  g->fingers = atoi(fingers);
+
+  /* direction */
+  if (strcmp(direction, "left") == 0) {
+    g->direction = GESTURE_LEFT;
+  } else if (strcmp(direction, "right") == 0) {
+    g->direction = GESTURE_RIGHT;
+  } else if (strcmp(direction, "up") == 0) {
+    g->direction = GESTURE_UP;
+  } else if (strcmp(direction, "down") == 0) {
+    g->direction = GESTURE_DOWN;
+  } else {
+    wlr_log(WLR_ERROR, "invalid gesture direction '%s'", direction);
+    free(g);
+    return false;
+  }
+
+  /* actions */
+  if (strcmp(action, "workspace") == 0) {
+    if (arg_count < 1) {
+      free(g);
+      return false;
+    }
+
+    g->action = keybind_change_workspace;
+    g->args = (void *)(uintptr_t)atoi(args[0]);
+
+  } else if (strcmp(action, "next_workspace") == 0) {
+    g->action = keybind_next_workspace;
+
+  } else if (strcmp(action, "prev_workspace") == 0) {
+    g->action = keybind_prev_workspace;
+
+  } else if (strcmp(action, "layout") == 0) {
+    if (arg_count < 1) {
+      free(g);
+      return false;
+    }
+
+    g->action = keybind_set_layout;
+
+    if (strcmp(args[0], "master") == 0)
+      g->args = (void *)(uintptr_t)ASHWC_LAYOUT_MASTER;
+    else if (strcmp(args[0], "grid") == 0)
+      g->args = (void *)(uintptr_t)ASHWC_LAYOUT_GRID;
+    else if (strcmp(args[0], "monocle") == 0)
+      g->args = (void *)(uintptr_t)ASHWC_LAYOUT_MONOCLE;
+    else {
+      wlr_log(WLR_ERROR, "invalid layout '%s'", args[0]);
+      free(g);
+      return false;
+    }
+
+  } else if (strcmp(action, "toggle_fullscreen") == 0) {
+    g->action = keybind_focused_toplevel_toggle_fullscreen;
+
+  } else if (strcmp(action, "toggle_floating") == 0) {
+    g->action = keybind_focused_toplevel_toggle_floating;
+
+  } else if (strcmp(action, "toggle_sticky") == 0) {
+    g->action = keybind_focused_toplevel_toggle_sticky;
+  } else if (strcmp(action, "move_focus") == 0) {
+    if (arg_count < 1) {
+      wlr_log(WLR_ERROR, "invalid args to %s", action);
+      free(g);
+      return false;
+    }
+
+    enum ashwc_direction direction;
+    if (strcmp(args[0], "up") == 0) {
+      direction = ASHWC_UP;
+    } else if (strcmp(args[0], "left") == 0) {
+      direction = ASHWC_LEFT;
+    } else if (strcmp(args[0], "down") == 0) {
+      direction = ASHWC_DOWN;
+    } else if (strcmp(args[0], "right") == 0) {
+      direction = ASHWC_RIGHT;
+    } else {
+      wlr_log(WLR_ERROR, "invalid args to %s", action);
+      free(g);
+      return false;
+    }
+
+    g->action = keybind_move_focus;
+    g->args = (void *)direction;
+  } else {
+    wlr_log(WLR_ERROR, "invalid gesture action '%s'", action);
+    free(g);
+    return false;
+  }
+
+  wl_list_insert(&c->gestures, &g->link);
+  return true;
+}
+
 bool config_handle_value(struct ashwc_config *c, char *keyword, char **args,
                          size_t arg_count) {
   if (strcmp(keyword, "min_toplevel_size") == 0) {
@@ -706,6 +818,9 @@ bool config_handle_value(struct ashwc_config *c, char *keyword, char **args,
       goto invalid;
 
     config_add_keybind(c, args[0], args[1], args[2], &args[3], arg_count - 3);
+  } else if (!strcmp(keyword, "gesture")) {
+    return config_add_gesture(c, args[0], args[1], args[2], args[3], args + 4,
+                              arg_count - 4);
   } else if (strcmp(keyword, "env") == 0) {
     if (arg_count < 2)
       goto invalid;
@@ -1190,6 +1305,7 @@ struct ashwc_config *config_load(void) {
   }
 
   wl_list_init(&c->keybinds);
+  wl_list_init(&c->gestures);
   wl_list_init(&c->pointer_keybinds);
   wl_list_init(&c->outputs);
   wl_list_init(&c->workspaces);
@@ -1219,6 +1335,12 @@ void config_destroy(struct ashwc_config *c) {
   wl_list_for_each_safe(o, o_temp, &c->outputs, link) {
     free(o->name);
     free(o);
+  }
+
+  struct gesture *g, *tmp;
+  wl_list_for_each_safe(g, tmp, &c->gestures, link) {
+    wl_list_remove(&g->link);
+    free(g);
   }
 
   struct keybind *k, *k_temp;
@@ -1464,6 +1586,18 @@ void config_reload() {
                    (uint64_t)k->args == w->index) {
           k->args = w;
           k->initialized = true;
+        }
+      }
+
+      /* we rewire the gestures */
+      struct gesture *g;
+      wl_list_for_each(g, &server.config->gestures, link) {
+        if (g->action == keybind_change_workspace &&
+            (uint64_t)g->args == w->index) {
+          g->args = w;
+        } else if (g->action == keybind_move_focused_toplevel_to_workspace &&
+                   (uint64_t)g->args == w->index) {
+          g->args = w;
         }
       }
 

@@ -42,6 +42,7 @@ src = [
   'src/decoration/decoration.c',
   'src/dnd/dnd.c',
   'src/gamma_control/gamma_control.c',
+  'src/gestures/gestures.c',
   'src/helpers/helpers.c',
   'src/ipc/ipc.c',
   'src/keybinds/keybinds.c',

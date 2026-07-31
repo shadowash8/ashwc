@@ -98,6 +98,7 @@ struct ashwc_config {
 
   struct wl_list outputs;
   struct wl_list keybinds;
+  struct wl_list gestures;
   struct wl_list pointer_keybinds;
   struct wl_list workspaces;
   struct {
@@ -190,6 +191,10 @@ bool config_add_window_rule(struct ashwc_config *c, char *app_id_regex,
 
 bool config_add_keybind(struct ashwc_config *c, char *modifiers, char *key,
                         char *action, char **args, size_t arg_count);
+
+bool config_add_gesture(struct ashwc_config *c, char *type, char *fingers,
+                        char *direction, char *action, char **args,
+                        size_t arg_count);
 
 void config_free_args(char **args, size_t arg_count);
 

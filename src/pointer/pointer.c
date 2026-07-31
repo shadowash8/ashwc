@@ -3,6 +3,7 @@
 #include "ashwc.h"
 #include "config/config.h"
 #include "dnd/dnd.h"
+#include "gestures/gestures.h"
 #include "ipc/ipc.h"
 #include "keybinds/keybinds.h"
 #include "layer_surface/layer_surface.h"
@@ -36,6 +37,16 @@ void server_handle_new_pointer(struct wlr_input_device *device) {
   wlr_cursor_attach_input_device(server.cursor, device);
 
   wl_list_insert(&server.pointers, &pointer->link);
+  pointer->swipe_begin.notify = pointer_handle_swipe_begin;
+  wl_signal_add(&pointer->wlr_pointer->events.swipe_begin,
+                &pointer->swipe_begin);
+
+  pointer->swipe_update.notify = pointer_handle_swipe_update;
+  wl_signal_add(&pointer->wlr_pointer->events.swipe_update,
+                &pointer->swipe_update);
+
+  pointer->swipe_end.notify = pointer_handle_swipe_end;
+  wl_signal_add(&pointer->wlr_pointer->events.swipe_end, &pointer->swipe_end);
 
   pointer->destroy.notify = pointer_handle_destroy;
   wl_signal_add(&device->events.destroy, &pointer->destroy);
@@ -46,6 +57,9 @@ void pointer_handle_destroy(struct wl_listener *listener, void *data) {
 
   wl_list_remove(&pointer->destroy.link);
   wl_list_remove(&pointer->link);
+  wl_list_remove(&pointer->swipe_begin.link);
+  wl_list_remove(&pointer->swipe_update.link);
+  wl_list_remove(&pointer->swipe_end.link);
 
   free(pointer);
 }
@@ -466,4 +480,44 @@ void constrain_apply_to_move(double *dx, double *dy) {
 void server_handle_relative_pointer_manager_destroy(
     struct wl_listener *listener, void *data) {
   wl_list_remove(&server.relative_pointer_manager_destroy.link);
+}
+
+void pointer_handle_swipe_begin(struct wl_listener *listener, void *data) {
+  struct ashwc_pointer *pointer =
+      wl_container_of(listener, pointer, swipe_begin);
+
+  struct wlr_pointer_swipe_begin_event *event = data;
+
+  pointer->swipe_fingers = event->fingers;
+  pointer->swipe_dx = 0;
+  pointer->swipe_dy = 0;
+}
+
+void pointer_handle_swipe_update(struct wl_listener *listener, void *data) {
+  struct ashwc_pointer *pointer =
+      wl_container_of(listener, pointer, swipe_update);
+
+  struct wlr_pointer_swipe_update_event *event = data;
+
+  pointer->swipe_dx += event->dx;
+  pointer->swipe_dy += event->dy;
+}
+
+void pointer_handle_swipe_end(struct wl_listener *listener, void *data) {
+  struct ashwc_pointer *pointer = wl_container_of(listener, pointer, swipe_end);
+
+  struct wlr_pointer_swipe_end_event *event = data;
+
+  if (event->cancelled)
+    return;
+
+  enum gesture_direction dir;
+
+  if (fabs(pointer->swipe_dx) > fabs(pointer->swipe_dy)) {
+    dir = pointer->swipe_dx > 0 ? GESTURE_RIGHT : GESTURE_LEFT;
+  } else {
+    dir = pointer->swipe_dy > 0 ? GESTURE_DOWN : GESTURE_UP;
+  }
+
+  handle_swipe(dir, pointer->swipe_fingers);
 }
