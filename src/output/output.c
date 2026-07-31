@@ -256,44 +256,63 @@ output_find_owned_workspace(struct ashwc_output *output) {
 }
 
 bool output_transfer_existing_workspaces(struct ashwc_output *output) {
-  /* if this output is reconnected then its workspaces are on some other
-   * monitor, we try to find it; this is not efficient as things could be
-   * flagged, i am just lazy rn */
   bool found = false;
   struct ashwc_output *o;
   struct ashwc_workspace *w, *tmp;
 
-  /* reclaim from stash first (covers the "last output disconnected and
-   * reconnected" case) */
+  /* Reclaim from stash (last output reconnected) */
   wl_list_for_each_safe(w, tmp, &server.stashed_workspaces, link) {
-    if (w->config != NULL &&
-        strcmp(w->config->output, output->wlr_output->name) == 0) {
-      w->output = output;
-      wl_list_remove(&w->link);
-      wl_list_insert(&output->workspaces, &w->link);
-      if (output->active_workspace == NULL) {
-        output->active_workspace = w;
-      }
-      found = true;
+    w->output = output;
+    wl_list_remove(&w->link);
+    wl_list_insert(&output->workspaces, &w->link);
+
+    /* Re-bind the IPC workspace handle to the new output's group */
+    if (w->ext_workspace != NULL && output->workspace_group != NULL) {
+      wlr_ext_workspace_handle_v1_set_group(w->ext_workspace,
+                                            output->workspace_group);
     }
+
+    /* Set active workspace state */
+    if (output->active_workspace == NULL) {
+      output->active_workspace = w;
+      if (w->ext_workspace) {
+        wlr_ext_workspace_handle_v1_set_active(w->ext_workspace, true);
+      }
+    } else if (w->ext_workspace) {
+      wlr_ext_workspace_handle_v1_set_active(w->ext_workspace, false);
+    }
+
+    /* Notify status update (so hidden flags recalculate) */
+    workspace_update_hidden(w);
+
+    found = true;
   }
 
+  if (found) {
+    return true;
+  }
+
+  /* Transfer from other connected outputs */
   wl_list_for_each(o, &server.outputs, link) {
     wl_list_for_each_safe(w, tmp, &o->workspaces, link) {
       if (w->config != NULL &&
           strcmp(w->config->output, output->wlr_output->name) == 0) {
-        /* fix that outputs state */
         if (w == o->active_workspace) {
           struct ashwc_workspace *owned_workspace =
               output_find_owned_workspace(o);
-          /* it should have had its own workspace */
           assert(owned_workspace != NULL);
           change_workspace(owned_workspace, false);
         }
-        /* transfer it to this output */
         w->output = output;
         wl_list_remove(&w->link);
         wl_list_insert(&output->workspaces, &w->link);
+
+        /* Re-bind group when moving between active outputs as well */
+        if (w->ext_workspace != NULL && output->workspace_group != NULL) {
+          wlr_ext_workspace_handle_v1_set_group(w->ext_workspace,
+                                                output->workspace_group);
+        }
+
         if (output->active_workspace == NULL) {
           output->active_workspace = w;
         }
