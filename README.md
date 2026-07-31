@@ -18,6 +18,7 @@ although `ashwc` is aiming to be really simple in its behaviour, it does provide
 - tiling and floating toplevels
 - master layout with support for multiple masters, ideal for wide monitors
 - keyboard focused workflow
+- gestures support for touchpads
 - great multitasking with multimonitor and workspaces support
 - smooth and customizable animations
 - easy configuration with hot reloading on save
