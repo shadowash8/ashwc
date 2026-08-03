@@ -14,6 +14,7 @@
 #include <wlr/types/wlr_pointer_constraints_v1.h>
 #include <wlr/types/wlr_relative_pointer_v1.h>
 #include <wlr/types/wlr_server_decoration.h>
+#include <wlr/types/wlr_virtual_keyboard_v1.h>
 #include <wlr/util/box.h>
 
 #define max(a, b) ((a) > (b) ? (a) : (b))
@@ -74,6 +75,9 @@ struct ashwc_server {
 
   struct wlr_virtual_pointer_manager_v1 *virtual_pointer_mgr;
   struct wl_listener new_virtual_pointer;
+
+  struct wlr_virtual_keyboard_manager_v1 *virtual_keyboard_mgr;
+  struct wl_listener new_virtual_keyboard;
 
   struct wlr_cursor_shape_manager_v1 *cursor_shape_manager;
   struct wl_listener request_cursor_shape;

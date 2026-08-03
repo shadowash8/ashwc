@@ -27,3 +27,6 @@ void keyboard_destroy(void);
 
 void server_handle_new_keyboard_shortcuts_inhibitor(
     struct wl_listener *listener, void *data);
+
+void server_handle_new_virtual_keyboard(struct wl_listener *listener,
+                                        void *data);

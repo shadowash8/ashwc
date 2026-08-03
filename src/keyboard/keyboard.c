@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <wlr/types/wlr_seat.h>
+#include <wlr/types/wlr_virtual_keyboard_v1.h>
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
 
@@ -186,4 +187,15 @@ void server_handle_new_keyboard_shortcuts_inhibitor(
   wlr_log(WLR_INFO, "New keyboard shortcuts inhibitor");
 
   wlr_keyboard_shortcuts_inhibitor_v1_activate(inhibitor);
+}
+
+void server_handle_new_virtual_keyboard(struct wl_listener *listener,
+                                        void *data) {
+  struct wlr_virtual_keyboard_v1 *virtual_keyboard = data;
+
+  wlr_log(WLR_INFO, "New virtual keyboard connected via xdg-desktop-portal");
+
+  // Feed the virtual keyboard's wlr_input_device into your existing keyboard
+  // setup!
+  server_handle_new_keyboard(&virtual_keyboard->keyboard.base);
 }
