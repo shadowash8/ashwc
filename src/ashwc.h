@@ -72,6 +72,9 @@ struct ashwc_server {
   struct wl_listener cursor_axis;
   struct wl_listener cursor_frame;
 
+  struct wlr_virtual_pointer_manager_v1 *virtual_pointer_mgr;
+  struct wl_listener new_virtual_pointer;
+
   struct wlr_cursor_shape_manager_v1 *cursor_shape_manager;
   struct wl_listener request_cursor_shape;
   struct wl_listener cursor_shape_manager_destroy;

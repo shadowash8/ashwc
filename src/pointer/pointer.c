@@ -20,6 +20,7 @@
 #include <wlr/backend/libinput.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_cursor.h>
+#include <wlr/types/wlr_virtual_pointer_v1.h>
 #include <wlr/util/log.h>
 #include <wlr/util/region.h>
 
@@ -520,4 +521,18 @@ void pointer_handle_swipe_end(struct wl_listener *listener, void *data) {
   }
 
   handle_swipe(dir, pointer->swipe_fingers);
+}
+
+void server_handle_new_virtual_pointer(struct wl_listener *listener,
+                                       void *data) {
+  struct wlr_virtual_pointer_v1_new_pointer_event *event = data;
+  struct wlr_virtual_pointer_v1 *virtual_pointer = event->new_pointer;
+  struct wlr_input_device *device = &virtual_pointer->pointer.base;
+
+  /* Attach the virtual pointer input device to the cursor */
+  wlr_cursor_attach_input_device(server.cursor, device);
+
+  /* Note: We do NOT call pointer_configure(pointer) here
+   * because virtual pointers are not libinput devices. */
+  wlr_log(WLR_INFO, "new virtual pointer attached to cursor");
 }

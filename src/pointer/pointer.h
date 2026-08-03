@@ -38,6 +38,9 @@ enum ashwc_cursor_mode {
 
 void server_handle_new_pointer(struct wlr_input_device *device);
 
+void server_handle_new_virtual_pointer(struct wl_listener *listener,
+                                       void *data);
+
 void pointer_handle_destroy(struct wl_listener *listener, void *data);
 
 bool pointer_configure(struct ashwc_pointer *pointer);

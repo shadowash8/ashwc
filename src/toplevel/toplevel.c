@@ -811,7 +811,9 @@ void toplevel_unset_fullscreen(struct ashwc_toplevel *toplevel) {
     toplevel_set_pending_state(
         toplevel, toplevel->prev_geometry.x, toplevel->prev_geometry.y,
         toplevel->prev_geometry.width, toplevel->prev_geometry.height);
-    wlr_scene_node_reparent(&toplevel->scene_tree->node, server.floating_tree);
+    wlr_scene_node_reparent(&toplevel->scene_tree->node,
+                            toplevel->sticky ? server.sticky_tree
+                                             : server.floating_tree);
   } else {
     wlr_scene_node_reparent(&toplevel->scene_tree->node, server.tiled_tree);
   }

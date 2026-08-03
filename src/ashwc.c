@@ -399,7 +399,11 @@ int main(int argc, char *argv[]) {
 
   wlr_fractional_scale_manager_v1_create(server.wl_display, 1);
 
-  wlr_virtual_pointer_manager_v1_create(server.wl_display);
+  server.virtual_pointer_mgr =
+      wlr_virtual_pointer_manager_v1_create(server.wl_display);
+  server.new_virtual_pointer.notify = server_handle_new_virtual_pointer;
+  wl_signal_add(&server.virtual_pointer_mgr->events.new_virtual_pointer,
+                &server.new_virtual_pointer);
   wlr_virtual_keyboard_manager_v1_create(server.wl_display);
 
   server.keyboard_shortcuts_inhibit =
