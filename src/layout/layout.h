@@ -46,6 +46,12 @@ struct ashwc_toplevel *layout_monocle_next(struct ashwc_workspace *workspace,
 struct ashwc_toplevel *layout_monocle_prev(struct ashwc_workspace *workspace,
                                            struct ashwc_toplevel *current);
 
+void layout_canvas(struct ashwc_workspace *workspace);
+
+void layout_canvas_enter(struct ashwc_workspace *workspace);
+
+void layout_canvas_exit(struct ashwc_workspace *workspace);
+
 struct ashwc_toplevel *
 layout_grid_find_neighbor(struct ashwc_workspace *workspace,
                           struct ashwc_toplevel *current,

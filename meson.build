@@ -51,6 +51,7 @@ src = [
   'src/layout/layout.c',
   'src/layout/master.c',
   'src/layout/grid.c',
+  'src/layout/canvas.c',
   'src/layout/monocle.c',
   'src/output/output.c',
   'src/pointer/pointer.c',
