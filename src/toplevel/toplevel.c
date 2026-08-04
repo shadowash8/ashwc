@@ -96,6 +96,8 @@ void toplevel_handle_initial_commit(struct ashwc_toplevel *toplevel) {
   bool canvas_layout = toplevel->workspace->layout == ASHWC_LAYOUT_CANVAS;
   toplevel->floating = toplevel_should_float(toplevel) || canvas_layout;
   toplevel->canvas = canvas_layout && !toplevel_should_float(toplevel);
+  toplevel->canvas_restore_tiled =
+      canvas_layout && !toplevel_should_float(toplevel);
   toplevel->sticky = toplevel_should_stick(toplevel);
 
   if (toplevel->sticky)
@@ -895,6 +897,7 @@ void toplevel_enter_canvas(struct ashwc_toplevel *toplevel) {
     return;
 
   bool was_tiled = !toplevel->floating;
+  toplevel->canvas_restore_tiled = was_tiled;
   bool was_master = was_tiled && toplevel_is_master(toplevel);
 
   wl_list_remove(&toplevel->link);
@@ -932,25 +935,29 @@ void toplevel_exit_canvas(struct ashwc_toplevel *toplevel) {
 
   wl_list_remove(&toplevel->link);
 
-  if (wl_list_length(&ws->masters) < server.config->master_count) {
-    wl_list_insert(ws->masters.prev, &toplevel->link);
+  if (toplevel->canvas_restore_tiled) {
+    if (wl_list_length(&ws->masters) < server.config->master_count)
+      wl_list_insert(ws->masters.prev, &toplevel->link);
+    else
+      wl_list_insert(ws->slaves.prev, &toplevel->link);
+
+    toplevel->floating = false;
   } else {
-    wl_list_insert(ws->slaves.prev, &toplevel->link);
-  }
-
-  wlr_scene_node_reparent(&toplevel->scene_tree->node, server.tiled_tree);
-
-  toplevel->canvas = false;
-  toplevel->floating = toplevel_should_float(toplevel);
-
-  if (toplevel->floating) {
-    /* still floats per window rules — put it back in floating_tree/list
-     * instead, same handling as any other floating window */
-    wl_list_remove(&toplevel->link);
     wl_list_insert(&ws->floating_toplevels, &toplevel->link);
+
+    toplevel->floating = true;
+
     wlr_scene_node_reparent(&toplevel->scene_tree->node,
                             toplevel->sticky ? server.sticky_tree
                                              : server.floating_tree);
+    wlr_scene_node_raise_to_top(&toplevel->scene_tree->node);
+  }
+
+  toplevel->canvas = false;
+  toplevel->canvas_restore_tiled = false;
+
+  if (!toplevel->floating) {
+    wlr_scene_node_reparent(&toplevel->scene_tree->node, server.tiled_tree);
   }
 
   layout_set_pending_state(ws);
@@ -1340,4 +1347,8 @@ void xdg_activation_handle_request(struct wl_listener *listener, void *data) {
 void xdg_activation_destroy() {
   wl_list_remove(&server.xdg_activation_request.link);
   wl_list_remove(&server.xdg_activation_new_token.link);
+}
+
+bool toplevel_is_real_floating(struct ashwc_toplevel *t) {
+  return t->floating && !t->canvas;
 }

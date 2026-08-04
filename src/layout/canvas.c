@@ -1,4 +1,3 @@
-
 #include "layout.h"
 
 extern struct ashwc_server server;
@@ -32,6 +31,8 @@ void layout_canvas_exit(struct ashwc_workspace *workspace) {
   struct ashwc_toplevel *t, *tmp;
 
   wl_list_for_each_safe(t, tmp, &workspace->canvas_toplevels, link) {
-    toplevel_exit_canvas(t);
+    if (t->canvas_restore_tiled) {
+      toplevel_exit_canvas(t);
+    }
   }
 }

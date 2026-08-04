@@ -145,7 +145,7 @@ void keybind_move_focused_toplevel_to_workspace(void *data) {
 
 void keybind_resize_focused_toplevel(void *data) {
   struct ashwc_toplevel *toplevel = get_pointer_focused_toplevel();
-  if (toplevel == NULL || !toplevel->floating)
+  if (toplevel == NULL || !toplevel_is_real_floating(toplevel))
     return;
 
   uint32_t edges = toplevel_get_closest_corner(server.cursor, toplevel);
@@ -200,7 +200,7 @@ void keybind_stop_move_focused_toplevel(void *data) {
   if (server.grabbed_toplevel == NULL)
     return;
 
-  if (!server.grabbed_toplevel->floating) {
+  if (!toplevel_is_real_floating(server.grabbed_toplevel)) {
     toplevel_tiled_insert_into_layout(server.grabbed_toplevel, server.cursor->x,
                                       server.cursor->y);
   } else {

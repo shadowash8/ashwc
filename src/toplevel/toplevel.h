@@ -24,6 +24,7 @@ struct ashwc_toplevel {
 
   bool floating;
   bool canvas;
+  bool canvas_restore_tiled;
   bool fullscreen;
   bool sticky;
   /* if a floating toplevel becomes fullscreen, we keep its previous state here
@@ -164,3 +165,5 @@ void xdg_activation_handle_new_token(struct wl_listener *listener, void *data);
 void xdg_activation_handle_request(struct wl_listener *listener, void *data);
 
 void xdg_activation_destroy(void);
+
+bool toplevel_is_real_floating(struct ashwc_toplevel *t);
