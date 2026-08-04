@@ -16,20 +16,20 @@ void layout_set_pending_state(struct ashwc_workspace *workspace) {
     return;
 
   switch (workspace->layout) {
-    case ASHWC_LAYOUT_MASTER:
-      layout_master(workspace);
-      break;
+  case ASHWC_LAYOUT_MASTER:
+    layout_master(workspace);
+    break;
 
-    case ASHWC_LAYOUT_MONOCLE:
-      layout_monocle(workspace);
-      break;
+  case ASHWC_LAYOUT_MONOCLE:
+    layout_monocle(workspace);
+    break;
 
-    case ASHWC_LAYOUT_GRID:
-      layout_grid(workspace);
-      break;
+  case ASHWC_LAYOUT_GRID:
+    layout_grid(workspace);
+    break;
 
-    default:
-      break;
+  default:
+    break;
   }
 }
 
@@ -111,12 +111,38 @@ struct ashwc_toplevel *layout_toplevel_at(struct ashwc_workspace *workspace,
 
 void workspace_set_layout(struct ashwc_workspace *workspace,
                           enum ashwc_layout layout) {
-  if (workspace == NULL) {
+  if (workspace->layout == layout)
     return;
-  }
 
-  if (workspace->layout == layout) {
-    return;
+  if (layout == ASHWC_LAYOUT_CANVAS) {
+    struct wl_list snapshot;
+    wl_list_init(&snapshot);
+
+    /* move (not copy) every non-fullscreen tiled toplevel's link into a
+     * throwaway list first, so masters/slaves stop changing shape while
+     * we convert */
+    struct ashwc_toplevel *t, *tmp;
+    wl_list_for_each_safe(t, tmp, &workspace->masters, link) {
+      if (t != workspace->fullscreen_toplevel) {
+        wl_list_remove(&t->link);
+        wl_list_insert(&snapshot, &t->link);
+      }
+    }
+    wl_list_for_each_safe(t, tmp, &workspace->slaves, link) {
+      if (t != workspace->fullscreen_toplevel) {
+        wl_list_remove(&t->link);
+        wl_list_insert(&snapshot, &t->link);
+      }
+    }
+
+    /* now convert — masters/slaves are untouched by this point, so any
+     * backfill inside toplevel_enter_canvas can't loop back into us */
+    wl_list_for_each_safe(t, tmp, &snapshot, link) { toplevel_enter_canvas(t); }
+  } else if (workspace->layout == ASHWC_LAYOUT_CANVAS) {
+    struct ashwc_toplevel *t, *tmp;
+    wl_list_for_each_safe(t, tmp, &workspace->canvas_toplevels, link) {
+      toplevel_exit_canvas(t);
+    }
   }
 
   workspace->layout = layout;

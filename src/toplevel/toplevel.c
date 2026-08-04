@@ -93,7 +93,9 @@ void server_handle_new_toplevel(struct wl_listener *listener, void *data) {
 void toplevel_handle_initial_commit(struct ashwc_toplevel *toplevel) {
   /* when an xdg_surface performs an initial commit, the compositor must
    * reply with a configure so the client can map the surface. */
-  toplevel->floating = toplevel_should_float(toplevel);
+  bool canvas_layout = toplevel->workspace->layout == ASHWC_LAYOUT_CANVAS;
+  toplevel->floating = toplevel_should_float(toplevel) || canvas_layout;
+  toplevel->canvas = canvas_layout && !toplevel_should_float(toplevel);
   toplevel->sticky = toplevel_should_stick(toplevel);
 
   if (toplevel->sticky)
@@ -176,7 +178,12 @@ void toplevel_handle_map(struct wl_listener *listener, void *data) {
   /* called when the surface is mapped, or ready to display on-screen. */
   struct ashwc_toplevel *toplevel = wl_container_of(listener, toplevel, map);
 
-  if (toplevel->floating) {
+  if (toplevel->canvas) {
+    wl_list_insert(&toplevel->workspace->canvas_toplevels, &toplevel->link);
+    workspace_update_hidden(toplevel->workspace);
+    toplevel->scene_tree = wlr_scene_xdg_surface_create(
+        toplevel->workspace->canvas_tree, toplevel->xdg_toplevel->base);
+  } else if (toplevel->floating) {
     wl_list_insert(&toplevel->workspace->floating_toplevels, &toplevel->link);
     workspace_update_hidden(toplevel->workspace);
     toplevel->scene_tree = wlr_scene_xdg_surface_create(
@@ -199,9 +206,13 @@ void toplevel_handle_map(struct wl_listener *listener, void *data) {
   /* output at 0, 0 would get this toplevel flashed if its on some other output,
    * so we move it to its own, which will cause it to send frame event which
    * will place it where it belongs */
-  wlr_scene_node_set_position(&toplevel->scene_tree->node,
-                              toplevel->workspace->output->usable_area.x,
-                              toplevel->workspace->output->usable_area.y);
+  if (toplevel->canvas) {
+    struct wlr_box output_box = toplevel->workspace->output->usable_area;
+    toplevel->pending.x = output_box.x + toplevel->workspace->canvas_pan_x +
+                          (output_box.width - toplevel->pending.width) / 2;
+    toplevel->pending.y = output_box.y + toplevel->workspace->canvas_pan_y +
+                          (output_box.height - toplevel->pending.height) / 2;
+  }
 
   /* this often breaks the toplevel, but what can i do about it? */
   if (toplevel->workspace->fullscreen_toplevel != NULL) {
@@ -255,8 +266,6 @@ void toplevel_handle_unmap(struct wl_listener *listener, void *data) {
 
   struct ashwc_workspace *workspace = toplevel->workspace;
 
-  /* reset the cursor mode if the grabbed toplevel was unmapped. */
-  /* if its the one focus should be returned to, remove it */
   if (toplevel == server.prev_focused) {
     server.prev_focused = NULL;
   }
@@ -264,7 +273,12 @@ void toplevel_handle_unmap(struct wl_listener *listener, void *data) {
   if (toplevel == server.grabbed_toplevel) {
     server_reset_cursor_mode();
 
-    if (toplevel->floating && !wl_list_empty(&workspace->floating_toplevels)) {
+    if (toplevel->canvas && !wl_list_empty(&workspace->canvas_toplevels)) {
+      struct ashwc_toplevel *t =
+          wl_container_of(workspace->canvas_toplevels.next, t, link);
+      focus_toplevel(t);
+    } else if (toplevel->floating &&
+               !wl_list_empty(&workspace->floating_toplevels)) {
       struct ashwc_toplevel *t =
           wl_container_of(workspace->floating_toplevels.next, t, link);
       focus_toplevel(t);
@@ -299,6 +313,38 @@ void toplevel_handle_unmap(struct wl_listener *listener, void *data) {
         continue;
       wlr_scene_node_set_enabled(&t->scene_tree->node, true);
     }
+    wl_list_for_each(t, &workspace->canvas_toplevels, link) {
+      if (t == toplevel)
+        continue;
+      wlr_scene_node_set_enabled(&t->scene_tree->node, true);
+    }
+  }
+
+  if (toplevel->canvas) {
+    if (server.focused_toplevel == toplevel) {
+      struct wl_list *focus_next = toplevel->link.next;
+      if (focus_next == &workspace->canvas_toplevels) {
+        focus_next = toplevel->link.prev;
+        if (focus_next == &workspace->canvas_toplevels) {
+          focus_next = workspace->masters.next;
+          if (focus_next == &workspace->masters) {
+            focus_next = NULL;
+          }
+        }
+      }
+
+      if (focus_next != NULL) {
+        struct ashwc_toplevel *t = wl_container_of(focus_next, t, link);
+        focus_toplevel(t);
+      } else {
+        server.focused_toplevel = NULL;
+        ipc_broadcast_message(IPC_ACTIVE_TOPLEVEL);
+      }
+    }
+
+    wl_list_remove(&toplevel->link);
+    workspace_update_hidden(workspace);
+    return;
   }
 
   if (toplevel->floating) {
@@ -842,6 +888,74 @@ void toplevel_unset_fullscreen(struct ashwc_toplevel *toplevel) {
       toplevel->foreign_toplevel_handle, false);
 }
 
+void toplevel_enter_canvas(struct ashwc_toplevel *toplevel) {
+  struct ashwc_workspace *ws = toplevel->workspace;
+
+  if (toplevel->canvas || toplevel == ws->fullscreen_toplevel)
+    return;
+
+  bool was_tiled = !toplevel->floating;
+  bool was_master = was_tiled && toplevel_is_master(toplevel);
+
+  wl_list_remove(&toplevel->link);
+  wl_list_insert(&ws->canvas_toplevels, &toplevel->link);
+  wlr_scene_node_reparent(&toplevel->scene_tree->node, ws->canvas_tree);
+
+  toplevel->floating = true;
+  toplevel->canvas = true;
+
+  if (was_master && !wl_list_empty(&ws->slaves)) {
+    /* backfill the vacated master slot from the slave stack, same as
+     * toplevel_start_move does */
+    struct ashwc_toplevel *last = wl_container_of(ws->slaves.prev, last, link);
+    wl_list_remove(&last->link);
+    wl_list_insert(ws->masters.prev, &last->link);
+  }
+  if (was_tiled) {
+    layout_set_pending_state(ws);
+  }
+
+  /* convert its current on-screen rect into canvas-local coords so it
+   * doesn't jump: canvas-local = screen-space + current pan */
+  toplevel_set_pending_state(toplevel, toplevel->current.x + ws->canvas_pan_x,
+                             toplevel->current.y + ws->canvas_pan_y,
+                             toplevel->current.width, toplevel->current.height);
+
+  wlr_scene_node_raise_to_top(&toplevel->scene_tree->node);
+}
+
+void toplevel_exit_canvas(struct ashwc_toplevel *toplevel) {
+  struct ashwc_workspace *ws = toplevel->workspace;
+
+  if (!toplevel->canvas)
+    return;
+
+  wl_list_remove(&toplevel->link);
+
+  if (wl_list_length(&ws->masters) < server.config->master_count) {
+    wl_list_insert(ws->masters.prev, &toplevel->link);
+  } else {
+    wl_list_insert(ws->slaves.prev, &toplevel->link);
+  }
+
+  wlr_scene_node_reparent(&toplevel->scene_tree->node, server.tiled_tree);
+
+  toplevel->canvas = false;
+  toplevel->floating = toplevel_should_float(toplevel);
+
+  if (toplevel->floating) {
+    /* still floats per window rules — put it back in floating_tree/list
+     * instead, same handling as any other floating window */
+    wl_list_remove(&toplevel->link);
+    wl_list_insert(&ws->floating_toplevels, &toplevel->link);
+    wlr_scene_node_reparent(&toplevel->scene_tree->node,
+                            toplevel->sticky ? server.sticky_tree
+                                             : server.floating_tree);
+  }
+
+  layout_set_pending_state(ws);
+}
+
 void toplevel_move(void) {
   /* move the grabbed toplevel to the new position */
   struct ashwc_toplevel *toplevel = server.grabbed_toplevel;
@@ -977,6 +1091,11 @@ void focus_toplevel(struct ashwc_toplevel *toplevel) {
   if (toplevel->floating) {
     wl_list_remove(&toplevel->link);
     wl_list_insert(&toplevel->workspace->floating_toplevels, &toplevel->link);
+  }
+
+  if (toplevel->canvas) {
+    wl_list_remove(&toplevel->link);
+    wl_list_insert(&toplevel->workspace->canvas_toplevels, &toplevel->link);
   }
 
   wlr_xdg_toplevel_set_activated(toplevel->xdg_toplevel, true);

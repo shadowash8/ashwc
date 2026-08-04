@@ -223,6 +223,16 @@ void cursor_handle_motion(uint32_t time) {
   } else if (server.cursor_mode == ASHWC_CURSOR_RESIZE) {
     toplevel_resize();
     return;
+  } else if (server.cursor_mode == ASHWC_CURSOR_PAN) {
+    double dx = server.cursor->x - server.pan_last_x;
+    double dy = server.cursor->y - server.pan_last_y;
+    server.pan_last_x = server.cursor->x;
+    server.pan_last_y = server.cursor->y;
+
+    if (server.pan_workspace->layout == ASHWC_LAYOUT_CANVAS) {
+      workspace_canvas_pan(server.pan_workspace, -dx, -dy);
+    }
+    return;
   }
 
   if (server.drag_active) {
@@ -502,6 +512,11 @@ void pointer_handle_swipe_update(struct wl_listener *listener, void *data) {
 
   pointer->swipe_dx += event->dx;
   pointer->swipe_dy += event->dy;
+
+  if (server.active_workspace->layout != ASHWC_LAYOUT_CANVAS)
+    return;
+
+  workspace_canvas_pan(server.active_workspace, -event->dx, -event->dy);
 }
 
 void pointer_handle_swipe_end(struct wl_listener *listener, void *data) {

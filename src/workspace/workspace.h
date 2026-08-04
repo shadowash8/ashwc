@@ -24,6 +24,9 @@ struct ashwc_workspace {
   struct wl_list slaves;
   struct wl_list floating_toplevels;
   struct ashwc_toplevel *fullscreen_toplevel;
+  struct wl_list canvas_toplevels;
+  struct wlr_scene_tree *canvas_tree;
+  double canvas_pan_x, canvas_pan_y;
   enum ashwc_layout layout;
 };
 
@@ -40,6 +43,8 @@ workspace_find_closest_floating_toplevel(struct ashwc_workspace *workspace,
                                          enum ashwc_direction side);
 
 void workspace_manager_handle_commit(struct wl_listener *listener, void *data);
+
+void workspace_canvas_pan(struct ashwc_workspace *ws, double dx, double dy);
 
 void workspace_update_hidden(struct ashwc_workspace *workspace);
 

@@ -19,12 +19,14 @@ void workspace_create_for_output(struct ashwc_output *output,
   struct ashwc_workspace *workspace = calloc(1, sizeof(*workspace));
 
   wl_list_init(&workspace->floating_toplevels);
+  wl_list_init(&workspace->canvas_toplevels);
   wl_list_init(&workspace->masters);
   wl_list_init(&workspace->slaves);
 
   workspace->output = output;
   workspace->index = config->index;
   workspace->config = config;
+  workspace->canvas_tree = wlr_scene_tree_create(server.canvas_tree);
   char id[16];
   snprintf(id, sizeof(id), "%u", workspace->index);
 
@@ -78,6 +80,10 @@ void change_workspace(struct ashwc_workspace *workspace, bool keep_focus) {
       struct ashwc_toplevel *t =
           wl_container_of(workspace->masters.next, t, link);
       focus_toplevel(t);
+    } else if (!wl_list_empty(&workspace->canvas_toplevels)) {
+      struct ashwc_toplevel *t =
+          wl_container_of(workspace->canvas_toplevels.next, t, link);
+      focus_toplevel(t);
     } else if (!wl_list_empty(&workspace->floating_toplevels)) {
       struct ashwc_toplevel *t =
           wl_container_of(workspace->floating_toplevels.next, t, link);
@@ -107,6 +113,8 @@ void change_workspace(struct ashwc_workspace *workspace, bool keep_focus) {
     if (!t->sticky)
       wlr_scene_node_set_enabled(&t->scene_tree->node, false);
   }
+  wlr_scene_node_set_enabled(
+      &workspace->output->active_workspace->canvas_tree->node, false);
 
   /* and show this workspace's toplevels */
   if (workspace->fullscreen_toplevel != NULL) {
@@ -126,6 +134,7 @@ void change_workspace(struct ashwc_workspace *workspace, bool keep_focus) {
       if (!t->sticky)
         wlr_scene_node_set_enabled(&t->scene_tree->node, true);
     }
+    wlr_scene_node_set_enabled(&workspace->canvas_tree->node, true);
 
     if (workspace->output->active_workspace->fullscreen_toplevel != NULL) {
       layers_under_fullscreen_set_enabled(workspace->output, true);
@@ -160,6 +169,10 @@ void change_workspace(struct ashwc_workspace *workspace, bool keep_focus) {
   } else if (!wl_list_empty(&workspace->masters)) {
     struct ashwc_toplevel *t =
         wl_container_of(workspace->masters.next, t, link);
+    focus_toplevel(t);
+  } else if (!wl_list_empty(&workspace->canvas_toplevels)) {
+    struct ashwc_toplevel *t =
+        wl_container_of(workspace->canvas_toplevels.next, t, link);
     focus_toplevel(t);
   } else if (!wl_list_empty(&workspace->floating_toplevels)) {
     struct ashwc_toplevel *t =
@@ -352,6 +365,16 @@ void workspace_manager_handle_commit(struct wl_listener *listener, void *data) {
       break;
     }
   }
+}
+
+void workspace_canvas_pan(struct ashwc_workspace *ws, double dx, double dy) {
+  ws->canvas_pan_x += dx;
+  ws->canvas_pan_y += dy;
+
+  wlr_scene_node_set_position(&ws->canvas_tree->node, -ws->canvas_pan_x,
+                              -ws->canvas_pan_y);
+
+  wlr_output_schedule_frame(ws->output->wlr_output);
 }
 
 void workspace_update_hidden(struct ashwc_workspace *workspace) {

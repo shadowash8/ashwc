@@ -397,6 +397,33 @@ bool config_add_keybind(struct ashwc_config *c, char *modifiers, char *key,
   } else if (strcmp(action, "move") == 0) {
     k->action = keybind_move_focused_toplevel;
     k->stop = keybind_stop_move_focused_toplevel;
+  } else if (strcmp(action, "pan") == 0) {
+    if (arg_count < 1) {
+      /* no direction given: continuous pointer-driven pan, e.g.
+       *   keybind ctrl pointer_left_click pan */
+      k->action = keybind_canvas_pan_start;
+      k->stop = keybind_canvas_pan_stop;
+    } else {
+      /* direction given: discrete nudge, e.g.
+       *   keybind super+h pan left */
+      enum ashwc_direction direction;
+      if (strcmp(args[0], "up") == 0) {
+        direction = ASHWC_UP;
+      } else if (strcmp(args[0], "left") == 0) {
+        direction = ASHWC_LEFT;
+      } else if (strcmp(args[0], "down") == 0) {
+        direction = ASHWC_DOWN;
+      } else if (strcmp(args[0], "right") == 0) {
+        direction = ASHWC_RIGHT;
+      } else {
+        wlr_log(WLR_ERROR, "invalid args to %s", action);
+        free(k);
+        return false;
+      }
+
+      k->action = keybind_canvas_pan;
+      k->args = (void *)direction;
+    }
   } else if (strcmp(action, "move_focus") == 0) {
     if (arg_count < 1) {
       wlr_log(WLR_ERROR, "invalid args to %s", action);
@@ -482,6 +509,8 @@ bool config_add_keybind(struct ashwc_config *c, char *modifiers, char *key,
       k->args = (void *)(uintptr_t)ASHWC_LAYOUT_GRID;
     } else if (strcmp(args[0], "monocle") == 0) {
       k->args = (void *)(uintptr_t)ASHWC_LAYOUT_MONOCLE;
+    } else if (strcmp(args[0], "canvas") == 0) {
+      k->args = (void *)(uintptr_t)ASHWC_LAYOUT_CANVAS;
     } else {
       wlr_log(WLR_ERROR, "invalid layout '%s'", args[0]);
       free(k);
@@ -581,6 +610,8 @@ bool config_add_gesture(struct ashwc_config *c, char *type, char *fingers,
       g->args = (void *)(uintptr_t)ASHWC_LAYOUT_GRID;
     else if (strcmp(args[0], "monocle") == 0)
       g->args = (void *)(uintptr_t)ASHWC_LAYOUT_MONOCLE;
+    else if (strcmp(args[0], "canvas") == 0)
+      g->args = (void *)(uintptr_t)ASHWC_LAYOUT_CANVAS;
     else {
       wlr_log(WLR_ERROR, "invalid layout '%s'", args[0]);
       free(g);
@@ -809,6 +840,8 @@ bool config_handle_value(struct ashwc_config *c, char *keyword, char **args,
       c->default_layout = ASHWC_LAYOUT_GRID;
     } else if (strcmp(args[0], "monocle") == 0) {
       c->default_layout = ASHWC_LAYOUT_MONOCLE;
+    } else if (strcmp(args[0], "canvas") == 0) {
+      c->default_layout = ASHWC_LAYOUT_CANVAS;
     } else {
       wlr_log(WLR_ERROR, "invalid layout '%s'", args[0]);
       goto invalid;

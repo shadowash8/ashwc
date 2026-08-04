@@ -25,7 +25,8 @@ struct ashwc_buffer_blur {
   struct wl_listener destroy;
 };
 
-static void buffer_blur_handle_destroy(struct wl_listener *listener, void *data) {
+static void buffer_blur_handle_destroy(struct wl_listener *listener,
+                                       void *data) {
   struct ashwc_buffer_blur *bb = wl_container_of(listener, bb, destroy);
   wl_list_remove(&bb->destroy.link);
   free(bb);
@@ -80,7 +81,7 @@ void toplevel_draw_borders(struct ashwc_toplevel *toplevel) {
         wlr_scene_rect_create(toplevel->scene_tree, 0, 0, border_color);
     wlr_scene_node_lower_to_bottom(&toplevel->border->node);
     wlr_scene_node_set_position(&toplevel->border->node, -border_width,
-                               -border_width);
+                                -border_width);
     wlr_scene_rect_set_corner_radii(toplevel->border, border_radii);
   }
 
@@ -94,7 +95,7 @@ void toplevel_draw_borders(struct ashwc_toplevel *toplevel) {
 
   struct clipped_region clipped_region = {
       .area = {border_width, border_width, width, height},
-      .corners= config_corner_radii(
+      .corners = config_corner_radii(
           max((int32_t)border_radius - (int32_t)border_width, 0)),
   };
   wlr_scene_rect_set_clipped_region(toplevel->border, clipped_region);
@@ -176,9 +177,8 @@ void iter_scene_buffer_apply_effects(struct wlr_scene_buffer *buffer, int lx,
     wlr_scene_blur_set_size(blur, surface_width, surface_height);
     wlr_scene_node_set_position(&blur->node, buffer->node.x, buffer->node.y);
 
-    wlr_scene_blur_set_corner_radii(
-        blur,
-        config_corner_radii(args->border_radius));
+    wlr_scene_blur_set_corner_radii(blur,
+                                    config_corner_radii(args->border_radius));
 
     struct clipped_region clipped_region = {
         .area = {0, 0, surface_width, surface_height},
@@ -407,10 +407,13 @@ void workspace_draw_frame(struct ashwc_workspace *workspace) {
         need_more_frames = true;
       }
     }
+    wl_list_for_each(t, &workspace->canvas_toplevels, link) {
+      if (toplevel_draw_frame(t)) {
+        need_more_frames = true;
+      }
+    }
   }
 
-  /* if there are animation that are not finished we request more frames
-   * for the output, until all the animations are done */
   if (need_more_frames) {
     wlr_output_schedule_frame(workspace->output->wlr_output);
   }

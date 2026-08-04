@@ -33,6 +33,7 @@ enum ashwc_layout {
   ASHWC_LAYOUT_MASTER,
   ASHWC_LAYOUT_GRID,
   ASHWC_LAYOUT_MONOCLE,
+  ASHWC_LAYOUT_CANVAS,
   ASHWC_LAYOUT_COUNT,
 };
 
@@ -47,6 +48,7 @@ struct ashwc_server {
   struct wlr_scene_output_layout *scene_layout;
 
   struct wlr_scene_tree *floating_tree;
+  struct wlr_scene_tree *canvas_tree;
   struct wlr_scene_tree *sticky_tree;
   struct wlr_scene_tree *tiled_tree;
   struct wlr_scene_tree *background_tree;
@@ -105,6 +107,8 @@ struct ashwc_server {
   struct wlr_box grabbed_toplevel_initial_box;
   uint32_t resize_edges;
   bool client_driven_move_resize;
+  struct ashwc_workspace *pan_workspace;
+  double pan_last_x, pan_last_y;
 
   /* keeps state about the client cursor when the server initialized move/resize
    */

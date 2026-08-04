@@ -23,6 +23,7 @@ struct ashwc_toplevel {
   struct ashwc_something something;
 
   bool floating;
+  bool canvas;
   bool fullscreen;
   bool sticky;
   /* if a floating toplevel becomes fullscreen, we keep its previous state here
@@ -128,6 +129,10 @@ void toplevel_commit(struct ashwc_toplevel *toplevel);
 void toplevel_set_fullscreen(struct ashwc_toplevel *toplevel);
 
 void toplevel_unset_fullscreen(struct ashwc_toplevel *toplevel);
+
+void toplevel_enter_canvas(struct ashwc_toplevel *toplevel);
+
+void toplevel_exit_canvas(struct ashwc_toplevel *toplevel);
 
 void toplevel_move(void);
 

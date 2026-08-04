@@ -34,6 +34,7 @@ enum ashwc_cursor_mode {
   ASHWC_CURSOR_PASSTHROUGH,
   ASHWC_CURSOR_MOVE,
   ASHWC_CURSOR_RESIZE,
+  ASHWC_CURSOR_PAN,
 };
 
 void server_handle_new_pointer(struct wlr_input_device *device);

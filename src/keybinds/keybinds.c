@@ -643,4 +643,60 @@ void keybind_focused_toplevel_toggle_fullscreen(void *data) {
   }
 }
 
+void keybind_canvas_pan(void *args) {
+  enum ashwc_direction dir = (uintptr_t)args;
+  struct ashwc_workspace *ws = server.active_workspace;
+  if (ws->layout != ASHWC_LAYOUT_CANVAS)
+    return;
+
+  double step = server.config->canvas_pan_step;
+  switch (dir) {
+  case ASHWC_UP:
+    workspace_canvas_pan(ws, 0, -step);
+    break;
+  case ASHWC_DOWN:
+    workspace_canvas_pan(ws, 0, step);
+    break;
+  case ASHWC_LEFT:
+    workspace_canvas_pan(ws, -step, 0);
+    break;
+  case ASHWC_RIGHT:
+    workspace_canvas_pan(ws, step, 0);
+    break;
+  }
+}
+
+void keybind_canvas_pan_start(void *data) {
+  if (server.grabbed_toplevel != NULL ||
+      server.cursor_mode != ASHWC_CURSOR_PASSTHROUGH)
+    return;
+
+  struct ashwc_workspace *ws = server.active_workspace;
+  if (ws->layout != ASHWC_LAYOUT_CANVAS)
+    return;
+
+  server.cursor_mode = ASHWC_CURSOR_PAN;
+  server.pan_workspace = ws;
+  server.pan_last_x = server.cursor->x;
+  server.pan_last_y = server.cursor->y;
+
+  wlr_cursor_set_xcursor(server.cursor, server.cursor_mgr, "grab");
+}
+
+void keybind_canvas_pan_stop(void *data) {
+  if (server.cursor_mode != ASHWC_CURSOR_PAN)
+    return;
+
+  server.cursor_mode = ASHWC_CURSOR_PASSTHROUGH;
+  server.pan_workspace = NULL;
+
+  if (server.client_cursor.surface != NULL) {
+    wlr_cursor_set_surface(server.cursor, server.client_cursor.surface,
+                           server.client_cursor.hotspot_x,
+                           server.client_cursor.hotspot_y);
+  } else {
+    wlr_cursor_set_xcursor(server.cursor, server.cursor_mgr, "default");
+  }
+}
+
 void keybind_reload_config(void *data) { config_reload(); }

@@ -167,6 +167,7 @@ struct ashwc_config {
 
   uint32_t master_count;
   double master_ratio;
+  double canvas_pan_step;
   enum ashwc_layout default_layout;
   bool client_side_decorations;
 
