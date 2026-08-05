@@ -61,4 +61,10 @@ void keybind_focused_toplevel_toggle_sticky(void *data);
 
 void keybind_focused_toplevel_toggle_fullscreen(void *data);
 
+void keybind_zoom(void *args);
+
+void keybind_zoom_start(void *data);
+
+void keybind_zoom_stop(void *data);
+
 void keybind_reload_config(void *data);

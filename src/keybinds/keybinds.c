@@ -17,6 +17,10 @@
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/xcursor.h>
 
+static double clampd(double v, double lo, double hi) {
+  return v < lo ? lo : (v > hi ? hi : v);
+}
+
 extern struct ashwc_server server;
 
 bool server_handle_keybinds(struct ashwc_keyboard *keyboard, uint32_t keycode,
@@ -640,6 +644,41 @@ void keybind_focused_toplevel_toggle_fullscreen(void *data) {
     toplevel_unset_fullscreen(toplevel);
   } else {
     toplevel_set_fullscreen(toplevel);
+  }
+}
+
+void keybind_zoom(void *args) {
+  bool zoom_in = (uintptr_t)args;
+  double factor = zoom_in ? 1.25 : 1.0 / 1.25;
+  server.zoom_target = clampd(server.zoom_target * factor, 0.1, 8.0);
+
+  struct ashwc_output *o;
+  wl_list_for_each(o, &server.outputs, link) {
+    wlr_output_schedule_frame(o->wlr_output);
+  }
+}
+
+void keybind_zoom_start(void *data) {
+  if (server.grabbed_toplevel != NULL ||
+      server.cursor_mode != ASHWC_CURSOR_PASSTHROUGH)
+    return;
+
+  server.cursor_mode = ASHWC_CURSOR_ZOOM;
+  server.zoom_last_y = server.cursor->y;
+  wlr_cursor_set_xcursor(server.cursor, server.cursor_mgr, "grab");
+}
+
+void keybind_zoom_stop(void *data) {
+  if (server.cursor_mode != ASHWC_CURSOR_ZOOM)
+    return;
+
+  server.cursor_mode = ASHWC_CURSOR_PASSTHROUGH;
+  if (server.client_cursor.surface != NULL) {
+    wlr_cursor_set_surface(server.cursor, server.client_cursor.surface,
+                           server.client_cursor.hotspot_x,
+                           server.client_cursor.hotspot_y);
+  } else {
+    wlr_cursor_set_xcursor(server.cursor, server.cursor_mgr, "default");
   }
 }
 

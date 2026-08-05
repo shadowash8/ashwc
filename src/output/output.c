@@ -16,10 +16,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wayland-util.h>
+#include <wlr/render/swapchain.h>
+#include <wlr/render/wlr_texture.h>
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_scene.h>
 #include <wlr/util/log.h>
+
+static double clampd(double v, double lo, double hi) {
+  return v < lo ? lo : (v > hi ? hi : v);
+}
 
 extern struct ashwc_server server;
 
@@ -40,6 +46,9 @@ void server_handle_new_output(struct wl_listener *listener, void *data) {
   bool success = output_initialize(wlr_output, output_config);
   if (!success)
     return;
+
+  server.zoom = 1.0;
+  server.zoom_target = 1.0;
 
   /* allocates and configures our state for this output */
   struct ashwc_output *output = calloc(1, sizeof(*output));
@@ -592,9 +601,63 @@ void focus_output(struct ashwc_output *output, enum ashwc_direction side) {
   }
 }
 
+void output_render_zoomed(struct ashwc_output *output,
+                          struct wlr_scene_output *so, struct timespec *now) {
+  struct wlr_output *handle = output->wlr_output;
+
+  if (!wlr_output_configure_primary_swapchain(handle, NULL,
+                                              &output->zoom_swapchain))
+    return;
+
+  struct wlr_output_state scene_state;
+  wlr_output_state_init(&scene_state);
+  struct wlr_scene_output_state_options opts = {0};
+  opts.swapchain = output->zoom_swapchain;
+  if (!wlr_scene_output_build_state(so, &scene_state, &opts) ||
+      !scene_state.buffer) {
+    wlr_output_state_finish(&scene_state);
+    return;
+  }
+
+  struct wlr_texture *tex =
+      wlr_texture_from_buffer(server.renderer, scene_state.buffer);
+
+  struct wlr_box lb;
+  wlr_output_layout_get_box(server.output_layout, handle, &lb);
+
+  double z = server.zoom;
+  double cx = clampd(server.cursor->x - lb.x, 0.0, (double)lb.width);
+  double cy = clampd(server.cursor->y - lb.y, 0.0, (double)lb.height);
+  double vw = lb.width / z, vh = lb.height / z;
+  double vx = clampd(cx - vw / 2, 0.0, lb.width - vw);
+  double vy = clampd(cy - vh / 2, 0.0, lb.height - vh);
+  double sx = (double)handle->width / lb.width,
+         sy = (double)handle->height / lb.height;
+
+  struct wlr_output_state out_state;
+  wlr_output_state_init(&out_state);
+  if (tex) {
+    struct wlr_render_pass *pass =
+        wlr_output_begin_render_pass(handle, &out_state, NULL);
+    if (pass) {
+      struct wlr_render_texture_options o = {0};
+      o.texture = tex;
+      o.src_box = (struct wlr_fbox){vx * sx, vy * sy, vw * sx, vh * sy};
+      o.dst_box = (struct wlr_box){0, 0, handle->width, handle->height};
+      o.filter_mode = WLR_SCALE_FILTER_BILINEAR;
+      wlr_render_pass_add_texture(pass, &o);
+      wlr_render_pass_submit(pass);
+    }
+    wlr_texture_destroy(tex);
+  }
+
+  wlr_output_commit_state(handle, &out_state);
+  wlr_output_state_finish(&out_state);
+  wlr_output_state_finish(&scene_state);
+  wlr_scene_output_send_frame_done(so, now);
+}
+
 void output_handle_frame(struct wl_listener *listener, void *data) {
-  /* this function is called every time an output is ready to display a frame,
-   * generally at the output's refresh rate */
   struct ashwc_output *output = wl_container_of(listener, output, frame);
   struct ashwc_workspace *workspace = output->active_workspace;
 
@@ -603,12 +666,45 @@ void output_handle_frame(struct wl_listener *listener, void *data) {
   struct wlr_scene_output *scene_output =
       wlr_scene_get_scene_output(server.scene, output->wlr_output);
 
-  wlr_scene_output_commit(scene_output, NULL);
-
   struct timespec now;
   clock_gettime(CLOCK_MONOTONIC, &now);
 
-  wlr_scene_output_send_frame_done(scene_output, &now);
+  bool has_cursor =
+      wlr_output_layout_output_at(server.output_layout, server.cursor->x,
+                                  server.cursor->y) == output->wlr_output;
+
+  bool zoom_animating = false;
+  if (has_cursor && server.zoom != server.zoom_target) {
+    double dt = (now.tv_sec - output->last_frame.tv_sec) +
+                (now.tv_nsec - output->last_frame.tv_nsec) / 1e9;
+    if (dt <= 0 || dt > 1.0)
+      dt = 1.0 / 60;
+    double tau = server.config->animation_duration / 1000.0 * 0.35;
+    server.zoom = server.zoom_target +
+                  (server.zoom - server.zoom_target) * exp(-dt / tau);
+    if (fabs(server.zoom - server.zoom_target) < 0.01)
+      server.zoom = server.zoom_target;
+    else
+      zoom_animating = true;
+  }
+
+  bool zoomed = has_cursor && server.zoom > 1.0;
+  bool exiting_zoom = output->zoom_active && !zoomed;
+
+  if (zoomed) {
+    output_render_zoomed(output, scene_output, &now);
+  } else {
+    if (exiting_zoom)
+      wlr_damage_ring_add_whole(&scene_output->damage_ring);
+    wlr_scene_output_commit(scene_output, NULL);
+    wlr_scene_output_send_frame_done(scene_output, &now);
+  }
+
+  output->zoom_active = zoomed;
+  output->last_frame = now;
+
+  if (zoom_animating)
+    wlr_output_schedule_frame(output->wlr_output);
 }
 
 void output_handle_request_state(struct wl_listener *listener, void *data) {
@@ -698,6 +794,10 @@ void output_handle_destroy(struct wl_listener *listener, void *data) {
       }
       server.active_workspace = NULL;
     }
+  }
+
+  if (output->zoom_swapchain) {
+    wlr_swapchain_destroy(output->zoom_swapchain);
   }
 
   if (output->session_lock_rect != NULL) {

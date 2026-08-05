@@ -397,6 +397,29 @@ bool config_add_keybind(struct ashwc_config *c, char *modifiers, char *key,
   } else if (strcmp(action, "move") == 0) {
     k->action = keybind_move_focused_toplevel;
     k->stop = keybind_stop_move_focused_toplevel;
+
+  } else if (strcmp(action, "zoom") == 0) {
+    if (arg_count < 1) {
+      /* no direction given: continuous pointer-driven zoom, e.g.
+       *   keybind ctrl pointer_right_click zoom */
+      k->action = keybind_zoom_start;
+      k->stop = keybind_zoom_stop;
+    } else {
+      /* in/out given: discrete step, e.g.
+       *   keybind super+plus zoom in */
+      bool zoom_in;
+      if (strcmp(args[0], "in") == 0) {
+        zoom_in = true;
+      } else if (strcmp(args[0], "out") == 0) {
+        zoom_in = false;
+      } else {
+        wlr_log(WLR_ERROR, "invalid args to %s", action);
+        free(k);
+        return false;
+      }
+      k->action = keybind_zoom;
+      k->args = (void *)(uintptr_t)zoom_in;
+    }
   } else if (strcmp(action, "move_focus") == 0) {
     if (arg_count < 1) {
       wlr_log(WLR_ERROR, "invalid args to %s", action);
