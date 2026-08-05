@@ -24,6 +24,10 @@
 #include <wlr/util/log.h>
 #include <wlr/util/region.h>
 
+static double clampd(double v, double lo, double hi) {
+  return v < lo ? lo : (v > hi ? hi : v);
+}
+
 extern struct ashwc_server server;
 
 void server_handle_new_pointer(struct wlr_input_device *device) {
@@ -232,6 +236,21 @@ void cursor_handle_motion(uint32_t time) {
     if (server.pan_workspace->layout == ASHWC_LAYOUT_CANVAS) {
       workspace_canvas_pan(server.pan_workspace, -dx, -dy);
     }
+  } else if (server.cursor_mode == ASHWC_CURSOR_ZOOM) {
+    double dy = server.zoom_last_y - server.cursor->y; // drag up = zoom in
+    server.zoom_last_y = server.cursor->y;
+
+    double factor = pow(1.01, dy); // tune sensitivity to taste
+    server.zoom_target = clampd(server.zoom_target * factor, 1.0, 8.0);
+
+    struct ashwc_output *o;
+    wl_list_for_each(o, &server.outputs, link) {
+      wlr_output_schedule_frame(o->wlr_output);
+    }
+
+    /* unlike PAN, don't warp/move the actual cursor position here — zoom
+     * doesn't move the pointer through layout space, only the magnification
+     * level, so just consume the motion event and return */
     return;
   }
 

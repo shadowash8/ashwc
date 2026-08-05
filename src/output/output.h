@@ -28,6 +28,10 @@ struct ashwc_output {
 
   struct wlr_scene_rect *session_lock_rect;
 
+  struct wlr_swapchain *zoom_swapchain;
+  bool zoom_active;
+  struct timespec last_frame;
+
   struct wl_listener frame;
   struct wl_listener commit;
   struct wl_listener request_state;

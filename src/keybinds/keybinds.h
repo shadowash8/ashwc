@@ -67,4 +67,10 @@ void keybind_canvas_pan_start(void *data);
 
 void keybind_canvas_pan_stop(void *data);
 
+void keybind_zoom(void *args);
+
+void keybind_zoom_start(void *data);
+
+void keybind_zoom_stop(void *data);
+
 void keybind_reload_config(void *data);

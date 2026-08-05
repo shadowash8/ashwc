@@ -100,6 +100,9 @@ struct ashwc_server {
   struct ashwc_keyboard *last_used_keyboard;
 
   enum ashwc_cursor_mode cursor_mode;
+  double zoom;
+  double zoom_target;
+  double zoom_last_y;
   /* this keeps state when the compositor is in the state of moving or
    * resizing toplevels */
   struct ashwc_toplevel *grabbed_toplevel;

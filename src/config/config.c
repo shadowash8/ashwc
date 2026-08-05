@@ -415,14 +415,32 @@ bool config_add_keybind(struct ashwc_config *c, char *modifiers, char *key,
         direction = ASHWC_DOWN;
       } else if (strcmp(args[0], "right") == 0) {
         direction = ASHWC_RIGHT;
+      }
+
+      k->action = keybind_canvas_pan;
+      k->args = (void *)direction;
+    }
+  } else if (strcmp(action, "zoom") == 0) {
+    if (arg_count < 1) {
+      /* no direction given: continuous pointer-driven zoom, e.g.
+       *   keybind ctrl pointer_right_click zoom */
+      k->action = keybind_zoom_start;
+      k->stop = keybind_zoom_stop;
+    } else {
+      /* in/out given: discrete step, e.g.
+       *   keybind super+plus zoom in */
+      bool zoom_in;
+      if (strcmp(args[0], "in") == 0) {
+        zoom_in = true;
+      } else if (strcmp(args[0], "out") == 0) {
+        zoom_in = false;
       } else {
         wlr_log(WLR_ERROR, "invalid args to %s", action);
         free(k);
         return false;
       }
-
-      k->action = keybind_canvas_pan;
-      k->args = (void *)direction;
+      k->action = keybind_zoom;
+      k->args = (void *)(uintptr_t)zoom_in;
     }
   } else if (strcmp(action, "move_focus") == 0) {
     if (arg_count < 1) {
@@ -479,8 +497,8 @@ bool config_add_keybind(struct ashwc_config *c, char *modifiers, char *key,
       return false;
     }
     k->action = keybind_change_workspace;
-    /* this is going to be overriden by the actual workspace that is needed for
-     * change_workspace() */
+    /* this is going to be overriden by the actual workspace that is needed
+     * for change_workspace() */
     k->args = (void *)(uintptr_t)atoi(args[0]);
     k->initialized = false;
   } else if (strcmp(action, "move_to_workspace") == 0) {
@@ -490,8 +508,8 @@ bool config_add_keybind(struct ashwc_config *c, char *modifiers, char *key,
       return false;
     }
     k->action = keybind_move_focused_toplevel_to_workspace;
-    /* this is going to be overriden by the actual workspace that is needed for
-     * change_workspace() */
+    /* this is going to be overriden by the actual workspace that is needed
+     * for change_workspace() */
     k->args = (void *)(uintptr_t)atoi(args[0]);
     k->initialized = false;
   } else if (strcmp(action, "layout") == 0) {
@@ -922,8 +940,8 @@ bool config_handle_value(struct ashwc_config *c, char *keyword, char **args,
     if (arg_count < 1)
       goto invalid;
 
-    /* we clamp it between 1 and INT_MAX so it works with current scenefx (see
-     * #75 on scenefx)*/
+    /* we clamp it between 1 and INT_MAX so it works with current scenefx
+     * (see #75 on scenefx)*/
     c->border_radius = clamp(atoi(args[0]), 1, INT_MAX);
   } else if (strcmp(keyword, "border_radius_location") == 0) {
     if (arg_count < 1)
@@ -1189,9 +1207,9 @@ bool config_handle_line(char *line, size_t line_number, char **keyword,
 }
 
 void config_set_default_needed_params(struct ashwc_config *c) {
-  /* as we are initializing config with calloc, some fields that are necessary
-   * in order for ashwc to not crash may be not specified in the config. we set
-   * their values to some default value.*/
+  /* as we are initializing config with calloc, some fields that are
+   * necessary in order for ashwc to not crash may be not specified in the
+   * config. we set their values to some default value.*/
   if (c->keyboard_rate == 0) {
     c->keyboard_rate = 150;
     wlr_log(WLR_INFO, "keyboard_rate not specified. using default %ud",
@@ -1218,7 +1236,8 @@ void config_set_default_needed_params(struct ashwc_config *c) {
             c->master_ratio);
   }
   if (c->master_ratio == 0) {
-    /* here we evenly space toplevels if there is no master_ratio specified */
+    /* here we evenly space toplevels if there is no master_ratio specified
+     */
     c->master_ratio = c->master_count / (double)(c->master_count + 1);
     wlr_log(WLR_INFO, "master_ratio not specified. using default %lf",
             c->master_ratio);
@@ -1505,7 +1524,8 @@ void config_reload() {
     return;
   }
 
-  /* we dont allow for hot reloading of workspaces, that would just be chaos */
+  /* we dont allow for hot reloading of workspaces, that would just be chaos
+   */
 
   /* TODO: maybe only support adding new workspaces */
   /*struct workspace_config *wc;*/
