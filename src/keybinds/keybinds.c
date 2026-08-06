@@ -629,7 +629,7 @@ void keybind_focused_toplevel_toggle_floating(void *data) {
 void keybind_focused_toplevel_toggle_sticky(void *data) {
   struct ashwc_toplevel *toplevel = server.focused_toplevel;
 
-  if (!toplevel)
+  if (!toplevel || toplevel->fullscreen)
     return;
 
   toplevel_toggle_sticky(toplevel);

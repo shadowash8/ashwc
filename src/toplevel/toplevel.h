@@ -28,6 +28,7 @@ struct ashwc_toplevel {
   /* if a floating toplevel becomes fullscreen, we keep its previous state here
    */
   struct wlr_box prev_geometry;
+  bool was_sticky;
 
   bool resizing;
 

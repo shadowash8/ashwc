@@ -759,6 +759,12 @@ void toplevel_set_fullscreen(struct ashwc_toplevel *toplevel) {
   if (toplevel == server.grabbed_toplevel)
     return;
 
+  /* fullscreen is workspace-scoped; sticky is not. rather than build a
+   * whole separate output-level fullscreen path, we just suspend
+   * stickiness for the duration and restore it on unfullscreen. */
+  toplevel->was_sticky = toplevel->sticky;
+  toplevel->sticky = false;
+
   struct ashwc_workspace *workspace = toplevel->workspace;
   struct ashwc_output *output = workspace->output;
 
@@ -811,6 +817,8 @@ void toplevel_unset_fullscreen(struct ashwc_toplevel *toplevel) {
 
   workspace->fullscreen_toplevel = NULL;
   toplevel->fullscreen = false;
+  toplevel->sticky = toplevel->was_sticky;
+  toplevel->was_sticky = false;
 
   wlr_xdg_toplevel_set_fullscreen(toplevel->xdg_toplevel, false);
 
