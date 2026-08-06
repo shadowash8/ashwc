@@ -180,7 +180,8 @@ void toplevel_handle_map(struct wl_listener *listener, void *data) {
     wl_list_insert(&toplevel->workspace->floating_toplevels, &toplevel->link);
     workspace_update_hidden(toplevel->workspace);
     toplevel->scene_tree = wlr_scene_xdg_surface_create(
-        server.floating_tree, toplevel->xdg_toplevel->base);
+        toplevel->sticky ? server.sticky_tree : server.floating_tree,
+        toplevel->xdg_toplevel->base);
   } else {
     if (wl_list_length(&toplevel->workspace->masters) <
         server.config->master_count) {
@@ -747,6 +748,12 @@ void toplevel_set_fullscreen(struct ashwc_toplevel *toplevel) {
   if (!toplevel->xdg_toplevel->base->surface->mapped)
     return;
 
+  if (toplevel->sticky && toplevel->workspace != server.active_workspace) {
+    wl_list_remove(&toplevel->link);
+    toplevel->workspace = server.active_workspace;
+    wl_list_insert(&toplevel->workspace->floating_toplevels, &toplevel->link);
+  }
+
   if (toplevel->workspace->fullscreen_toplevel != NULL)
     return;
   if (toplevel == server.grabbed_toplevel)
@@ -975,6 +982,9 @@ void focus_toplevel(struct ashwc_toplevel *toplevel) {
   server.focused_toplevel = toplevel;
 
   if (toplevel->floating) {
+    if (toplevel->sticky && toplevel->workspace != server.active_workspace) {
+      toplevel->workspace = server.active_workspace;
+    }
     wl_list_remove(&toplevel->link);
     wl_list_insert(&toplevel->workspace->floating_toplevels, &toplevel->link);
   }
