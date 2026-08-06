@@ -84,6 +84,8 @@ void pointer_destroy(void) {
 
   wl_list_remove(&server.relative_pointer_manager_destroy.link);
   wl_list_remove(&server.new_contraint.link);
+
+  wl_list_remove(&server.new_virtual_pointer.link);
 }
 
 bool pointer_configure(struct ashwc_pointer *pointer) {

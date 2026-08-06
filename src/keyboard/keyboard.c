@@ -111,6 +111,8 @@ void keyboard_handle_destroy(struct wl_listener *listener, void *data) {
 void keyboard_destroy() {
   wl_list_remove(&server.new_keyboard_shortcuts_inhibitor.link);
   wl_list_remove(&server.new_input.link);
+
+  wl_list_remove(&server.new_virtual_keyboard.link);
 }
 
 void server_handle_new_keyboard(struct wlr_input_device *device) {
